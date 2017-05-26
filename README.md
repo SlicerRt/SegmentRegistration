@@ -16,3 +16,5 @@ Specialized module to register prostate contours in an MRI and an ultrasound stu
 * Calculate Dice similarity metrics and Hausdorff distances
 * Calculate TRE with fiducials
 * Export deformed MRI contours and image to DICOM, so that it can be imported to commercial system for brachytherapy cathether insertion
+
+![Screenshot](https://www.slicer.org/w/images/a/a1/20170526_ProstatMRIUSContourPropagation.png)
