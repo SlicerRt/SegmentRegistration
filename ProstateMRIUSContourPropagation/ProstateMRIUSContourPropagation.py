@@ -154,13 +154,21 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
     self.registrationCollapsibleButtonLayout.addRow(self.performRegistrationButton)
     self.performRegistrationButton.connect('clicked()', self.onPerformRegistration)
 
-    # DICOM export button
-    self.dicomExportButton = qt.QPushButton("Export deformed MRI study to DICOM")
-    self.dicomExportButton.toolTip = "Initiate export of the deformed MRI study containing the image and structures into DICOM files on local storage"
-    self.dicomExportButton.name = "dicomExportButton"
-    self.dicomExportButton.enabled = False
-    self.registrationCollapsibleButtonLayout.addRow(self.dicomExportButton)
-    self.dicomExportButton.connect('clicked()', self.onDicomExport)
+    # MR DICOM export button
+    self.mrDicomExportButton = qt.QPushButton("Export deformed MRI study to DICOM")
+    self.mrDicomExportButton.toolTip = "Initiate export of the deformed MRI study containing the image and structures into DICOM files on local storage"
+    self.mrDicomExportButton.name = "mrDicomExportButton"
+    self.mrDicomExportButton.enabled = False
+    self.registrationCollapsibleButtonLayout.addRow(self.mrDicomExportButton)
+    self.mrDicomExportButton.connect('clicked()', self.onMrDicomExport)
+
+    # US DICOM export button
+    self.usDicomExportButton = qt.QPushButton("Export US with deformed structures to DICOM")
+    self.usDicomExportButton.toolTip = "Initiate export of the US study containing the image and the deformed structures into DICOM files on local storage"
+    self.usDicomExportButton.name = "usDicomExportButton"
+    self.usDicomExportButton.enabled = False
+    self.registrationCollapsibleButtonLayout.addRow(self.usDicomExportButton)
+    self.usDicomExportButton.connect('clicked()', self.onUsDicomExport)
 
     # Buttons to perform parts of the workflow (for testing)
     if self.developerMode and self.testingButtonsVisible:
@@ -326,9 +334,14 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
     if self.logic.performRegistration():
       self.onRegistrationSuccessful()
 
-  def onDicomExport(self):
+  #------------------------------------------------------------------------------
+  def onMrDicomExport(self):
     self.logic.exportDeformedMrStudyToDicom()
-  
+
+  #------------------------------------------------------------------------------
+  def onUsDicomExport(self):
+    self.logic.exportDeformedUsStudyToDicom()
+
   #------------------------------------------------------------------------------
   def onLoadData(self):
     self.logic.loadData()
@@ -357,7 +370,8 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
   #------------------------------------------------------------------------------
   def onRegistrationSuccessful(self):
     # Enable export button and evaluation section
-    self.dicomExportButton.enabled = True
+    self.mrDicomExportButton.enabled = True
+    self.usDicomExportButton.enabled = True
     self.evaluationCollapsibleButton.enabled = True
 
     # Create evaluation fiducials and set them to the markups widgets
@@ -500,7 +514,9 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     self.mrProstateLabelmap = None
     self.mrFiducialsNode = None
     self.mrVolumeNodeForExport = None
-    self.mrSegmentationNodeForExport = None
+    self.mrSegmentationNodeForMrExport = None
+    self.usVolumeNodeForExport = None
+    self.mrSegmentationNodeForUsExport = None
     # Flag determining whether the exported MR volume is resampled to match the US geometry or not
     self.resampleMrToUsGeometryForExport = False
 
@@ -875,34 +891,28 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     if self.bsplineTransformNode is None:
       logging.error('Unable to access registration result')
       return
-    if self.usVolumeNode is None:
-      logging.error('Unable to access US image')
-      return
 
     shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
-    if self.mrVolumeNodeForExport is None and self.mrSegmentationNodeForExport is None:
+    if self.mrVolumeNodeForExport is None and self.mrSegmentationNodeForMrExport is None:
       # Create new study for deformed MR volume and segmentation
-      deformedMrStudyShItemID = shNode.CreateItem(shNode.GetSceneItemID(), 'Deformed MRI Study', slicer.vtkMRMLSubjectHierarchyConstants.GetDICOMLevelStudy())
+      deformedMrStudyShItemID = shNode.CreateStudyItem(shNode.GetSceneItemID(), 'Deformed MRI Study')
 
       # Clone MR segmentation into new study
       mrSegmentationShItemID = shNode.GetItemByDataNode(self.mrSegmentationNode)
-      mrSegmentationNodeCloneName = self.mrSegmentationNode.GetName() + ' For Export'
-      mrSegmentationForExportShItemID = slicer.vtkSlicerSubjectHierarchyModuleLogic.CloneSubjectHierarchyItem(shNode, mrSegmentationShItemID, mrSegmentationNodeCloneName)
-      shNode.SetItemParent(mrSegmentationForExportShItemID, deformedMrStudyShItemID)
-      self.mrSegmentationNodeForExport = shNode.GetItemDataNode(mrSegmentationForExportShItemID)
-
-      # Set US volume geometry for labelmap conversion and create labelmap using that geometry
-      # usOrientedImageData = vtkSlicerSegmentationsModuleLogic.vtkSlicerSegmentationsModuleLogic.CreateOrientedImageDataFromVolumeNode(self.usVolumeNode)
-      # usGeometry = vtkSegmentationCore.vtkSegmentationConverter.SerializeImageGeometry(usOrientedImageData)
-      # self.mrSegmentationNodeForExport.GetSegmentation().RemoveRepresentation(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
-      # self.mrSegmentationNodeForExport.GetSegmentation().CreateRepresentation(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
-      # self.mrSegmentationNodeForExport.SetAndObserveTransformNodeID(self.bsplineTransformNode.GetID()) # Make sure the deformable transform is the parent when exporting
+      mrSegmentationNodeCloneName = self.mrSegmentationNode.GetName() + ' For Export with MRI'
+      mrSegmentationForMrExportShItemID = slicer.vtkSlicerSubjectHierarchyModuleLogic.CloneSubjectHierarchyItem(shNode, mrSegmentationShItemID, mrSegmentationNodeCloneName)
+      shNode.SetItemParent(mrSegmentationForMrExportShItemID, deformedMrStudyShItemID)
+      self.mrSegmentationNodeForMrExport = shNode.GetItemDataNode(mrSegmentationForMrExportShItemID)
 
       # Clone MR volume into the new study
       self.mrVolumeNodeForExport = slicer.vtkMRMLScalarVolumeNode()
       mrVolumeNodeForExportName = self.mrVolumeNode.GetName() + ' For Export'
       self.mrVolumeNodeForExport.SetName(mrVolumeNodeForExportName)
       slicer.mrmlScene.AddNode(self.mrVolumeNodeForExport)
+      # Set modality tag for the volume item
+      mrVolumeNodeForExportShItemID = shNode.GetItemByDataNode(self.mrVolumeNodeForExport)
+      shNode.SetItemAttribute( mrVolumeNodeForExportShItemID,
+        slicer.vtkMRMLSubjectHierarchyConstants.GetDICOMSeriesModalityAttributeName(), 'MR' )
 
       if self.resampleMrToUsGeometryForExport:
         # Create resampled MR volume in US reference frame so that the exported structure set is smoother
@@ -928,23 +938,84 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
       mrVolumeForExportShItemID = shNode.GetItemByDataNode(self.mrVolumeNodeForExport)
       shNode.SetItemParent(mrVolumeForExportShItemID, deformedMrStudyShItemID)
 
-    elif int(self.mrVolumeNodeForExport is None) + int(self.mrSegmentationNodeForExport is None) == 1:
+    elif int(self.mrVolumeNodeForExport is None) + int(self.mrSegmentationNodeForMrExport is None) == 1:
       # If only one of them exist, then there is an inconsistency
       logging.error('Critical inconsistency error! Only some of the data to export is found')
       return
     else:
       # All data exist for export. Get the study item for the export
-      mrSegmentationForExportShItemID = shNode.GetItemByDataNode(self.mrSegmentationNodeForExport)
+      mrSegmentationForMrExportShItemID = shNode.GetItemByDataNode(self.mrSegmentationNodeForMrExport)
       mrVolumeForExportShItemID = shNode.GetItemByDataNode(self.mrVolumeNodeForExport)
-      if shNode.GetItemParent(mrSegmentationForExportShItemID) != shNode.GetItemParent(mrVolumeForExportShItemID):
+      if shNode.GetItemParent(mrSegmentationForMrExportShItemID) != shNode.GetItemParent(mrVolumeForExportShItemID):
         logging.error('Inconsistency error! The data to export are not in the same subject hierarchy branch')
         return
-      deformedMrStudyShItemID = shNode.GetItemParent(mrSegmentationForExportShItemID)
+      deformedMrStudyShItemID = shNode.GetItemParent(mrSegmentationForMrExportShItemID)
 
     # Open DICOM export dialog, selecting the study to export
     exportDicomDialog = slicer.qSlicerDICOMExportDialog(None)
     exportDicomDialog.setMRMLScene(slicer.mrmlScene)
     exportDicomDialog.execDialog(deformedMrStudyShItemID)
+
+  #------------------------------------------------------------------------------
+  def exportDeformedUsStudyToDicom(self):
+    if not self.usPatientShItemID or self.usVolumeNode is None or self.mrSegmentationNode is None:
+      logging.error('Unable to access US data for DICOM export')
+      return
+    if self.bsplineTransformNode is None:
+      logging.error('Unable to access registration result')
+      return
+
+    shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
+    if self.usVolumeNodeForExport is None and self.mrSegmentationNodeForUsExport is None:
+      # Create new study for US volume and deformed MR segmentation
+      usStudyWithMrStructuresShItemID = shNode.CreateStudyItem(shNode.GetSceneItemID(), 'US Study with MRI structures')
+
+      # Clone MR segmentation into new study
+      mrSegmentationShItemID = shNode.GetItemByDataNode(self.mrSegmentationNode)
+      mrSegmentationNodeCloneName = self.mrSegmentationNode.GetName() + ' For Export with US'
+      mrSegmentationForUsExportShItemID = slicer.vtkSlicerSubjectHierarchyModuleLogic.CloneSubjectHierarchyItem(shNode, mrSegmentationShItemID, mrSegmentationNodeCloneName)
+      shNode.SetItemParent(mrSegmentationForUsExportShItemID, usStudyWithMrStructuresShItemID)
+      self.mrSegmentationNodeForUsExport = shNode.GetItemDataNode(mrSegmentationForUsExportShItemID)
+
+      # Set US volume geometry for labelmap conversion and create labelmap using that geometry
+      # usOrientedImageData = vtkSlicerSegmentationsModuleLogic.vtkSlicerSegmentationsModuleLogic.CreateOrientedImageDataFromVolumeNode(self.usVolumeNode)
+      # usGeometry = vtkSegmentationCore.vtkSegmentationConverter.SerializeImageGeometry(usOrientedImageData)
+      # self.mrSegmentationNodeForUsExport.GetSegmentation().RemoveRepresentation(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+      # self.mrSegmentationNodeForUsExport.GetSegmentation().CreateRepresentation(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+      # self.mrSegmentationNodeForUsExport.SetAndObserveTransformNodeID(self.bsplineTransformNode.GetID()) # Make sure the deformable transform is the parent when exporting
+
+      # Clone MR volume into the new study
+      self.usVolumeNodeForExport = slicer.vtkMRMLScalarVolumeNode()
+      usVolumeNodeForExportName = self.usVolumeNode.GetName() + ' For Export'
+      self.usVolumeNodeForExport.SetName(usVolumeNodeForExportName)
+      slicer.mrmlScene.AddNode(self.usVolumeNodeForExport)
+      # Set modality tag for the volume item
+      usVolumeNodeForExportShItemID = shNode.GetItemByDataNode(self.usVolumeNodeForExport)
+      shNode.SetItemAttribute( usVolumeNodeForExportShItemID,
+        slicer.vtkMRMLSubjectHierarchyConstants.GetDICOMSeriesModalityAttributeName(), 'US' )
+
+      self.usVolumeNodeForExport.Copy(self.usVolumeNode)
+
+      usVolumeForExportShItemID = shNode.GetItemByDataNode(self.usVolumeNodeForExport)
+      shNode.SetItemParent(usVolumeForExportShItemID, usStudyWithMrStructuresShItemID)
+
+    elif int(self.usVolumeNodeForExport is None) + int(self.mrSegmentationNodeForUsExport is None) == 1:
+      # If only one of them exist, then there is an inconsistency
+      logging.error('Critical inconsistency error! Only some of the data to export is found')
+      return
+    else:
+      # All data exist for export. Get the study item for the export
+      mrSegmentationForUsExportShItemID = shNode.GetItemByDataNode(self.mrSegmentationNodeForUsExport)
+      usVolumeForExportShItemID = shNode.GetItemByDataNode(self.usVolumeNodeForExport)
+      if shNode.GetItemParent(mrSegmentationForUsExportShItemID) != shNode.GetItemParent(usVolumeForExportShItemID):
+        logging.error('Inconsistency error! The data to export are not in the same subject hierarchy branch')
+        return
+      usStudyWithMrStructuresShItemID = shNode.GetItemParent(mrSegmentationForUsExportShItemID)
+
+    # Open DICOM export dialog, selecting the study to export
+    exportDicomDialog = slicer.qSlicerDICOMExportDialog(None)
+    exportDicomDialog.setMRMLScene(slicer.mrmlScene)
+    exportDicomDialog.execDialog(usStudyWithMrStructuresShItemID)
 
   #------------------------------------------------------------------------------
   def setupResultVisualization(self):
