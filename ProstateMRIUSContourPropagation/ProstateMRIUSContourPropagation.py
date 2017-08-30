@@ -331,8 +331,18 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
 
   #------------------------------------------------------------------------------
   def onPerformRegistration(self):
+    qt.QApplication.setOverrideCursor(qt.QCursor(qt.Qt.BusyCursor))
+    mrPatientShItemID = self.logic.mrPatientShItemID
+    usPatientShItemID = self.logic.usPatientShItemID
+
     if self.logic.performRegistration():
       self.onRegistrationSuccessful()
+
+    qt.QApplication.restoreOverrideCursor()
+    # Re-select patients, because selections were reset when SH comboboxes were rebuilt at the
+    # end batch processing event, which was called when CLIs finished and volumes were loaded.
+    self.mrPatientItemCombobox.setCurrentItem(mrPatientShItemID)
+    self.usPatientItemCombobox.setCurrentItem(usPatientShItemID)
 
   #------------------------------------------------------------------------------
   def onMrDicomExport(self):
