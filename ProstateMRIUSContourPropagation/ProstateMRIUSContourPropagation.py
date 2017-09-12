@@ -332,17 +332,11 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
   #------------------------------------------------------------------------------
   def onPerformRegistration(self):
     qt.QApplication.setOverrideCursor(qt.QCursor(qt.Qt.BusyCursor))
-    mrPatientShItemID = self.logic.mrPatientShItemID
-    usPatientShItemID = self.logic.usPatientShItemID
 
     if self.logic.performRegistration():
       self.onRegistrationSuccessful()
 
     qt.QApplication.restoreOverrideCursor()
-    # Re-select patients, because selections were reset when SH comboboxes were rebuilt at the
-    # end batch processing event, which was called when CLIs finished and volumes were loaded.
-    self.mrPatientItemCombobox.setCurrentItem(mrPatientShItemID)
-    self.usPatientItemCombobox.setCurrentItem(usPatientShItemID)
 
   #------------------------------------------------------------------------------
   def onMrDicomExport(self):
@@ -523,6 +517,10 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     self.mrCroppedVolumeNode = None
     self.mrProstateLabelmap = None
     self.mrFiducialsNode = None
+
+    self.parsedUsPatientShItemID = invalidShItemID
+    self.parsedMrPatientShItemID = invalidShItemID
+
     self.mrVolumeNodeForExport = None
     self.mrSegmentationNodeForMrExport = None
     self.usVolumeNodeForExport = None
@@ -554,6 +552,9 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
   def parseUSPatient(self):
     if not self.usPatientShItemID:
       return
+    if self.usPatientShItemID == self.parsedUsPatientShItemID:
+      # Do not re-parse the patient, because any changed selection will be over-ridden by the default (which was not optimal, that's why the user changed it)
+      return
     # Parse US patient
     shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
     self.usVolumeNode = None
@@ -568,10 +569,14 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
           self.usVolumeNode = currentDataNode
       if currentDataNode.IsA('vtkMRMLSegmentationNode'):
         self.usSegmentationNode = currentDataNode
+    self.parsedUsPatientShItemID = self.usPatientShItemID
 
   #------------------------------------------------------------------------------
   def parseMRPatient(self):
     if not self.mrPatientShItemID:
+      return
+    if self.mrPatientShItemID == self.parsedMrPatientShItemID:
+      # Do not re-parse the patient, because any changed selection will be over-ridden by the default (which was not optimal, that's why the user changed it)
       return
     # Parse MRI patient
     shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
@@ -587,6 +592,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
           self.mrVolumeNode = currentDataNode
       if currentDataNode.IsA('vtkMRMLSegmentationNode'):
         self.mrSegmentationNode = currentDataNode
+    self.parsedMrPatientShItemID = self.mrPatientShItemID
 
   #------------------------------------------------------------------------------
   def cropMRI(self):
@@ -906,6 +912,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     if self.mrVolumeNodeForExport is None and self.mrSegmentationNodeForMrExport is None:
       # Create new study for deformed MR volume and segmentation
       deformedMrStudyShItemID = shNode.CreateStudyItem(shNode.GetSceneItemID(), 'Deformed MRI Study')
+      shNode.SetItemParent(deformedMrStudyShItemID, self.mrPatientShItemID)
 
       # Clone MR segmentation into new study
       mrSegmentationShItemID = shNode.GetItemByDataNode(self.mrSegmentationNode)
@@ -979,6 +986,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     if self.usVolumeNodeForExport is None and self.mrSegmentationNodeForUsExport is None:
       # Create new study for US volume and deformed MR segmentation
       usStudyWithMrStructuresShItemID = shNode.CreateStudyItem(shNode.GetSceneItemID(), 'US Study with MRI structures')
+      shNode.SetItemParent(usStudyWithMrStructuresShItemID, self.usPatientShItemID)
 
       # Clone MR segmentation into new study
       mrSegmentationShItemID = shNode.GetItemByDataNode(self.mrSegmentationNode)
