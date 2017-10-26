@@ -1178,48 +1178,14 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       self.assertIsNotNone( slicer.modules.distancemapbasedregistration )
       self.assertIsNotNone( slicer.modules.cropvolume )
 
-      # Temporary testing method: Load local test data #TODO: Temporary testing
-      usPatientName = '0physique^Patient pour export DICOM'
-      usProstateSegmentName = 'target'
-      mrPatientName = 'F_MRI_US_1'
-      mrProstateSegmentName = 'Pros'
-      dicomWidget = slicer.modules.dicom.widgetRepresentation().self()
-      from DICOMLib import DICOMUtils
-      DICOMUtils.loadPatientByName(usPatientName)
-      DICOMUtils.loadPatientByName(mrPatientName)
-      shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
-      usPatientShItemID = shNode.GetItemChildWithName(shNode.GetSceneItemID(), usPatientName)
-      mrPatientShItemID = shNode.GetItemChildWithName(shNode.GetSceneItemID(), mrPatientName)
-      logging.info('Test data loaded')
-
-      # Temporary testing method: Set UI selection and run workflow by that #TODO: Temporary testing
-      if hasattr(self,'widget') and self.widget is not None:
-        moduleWidget = self.widget
-      else:
-        # This does not work after reloaded from UI, that's why we need the test button and the widget member
-        moduleWidget = slicer.modules.prostatemriuscontourpropagation.widgetRepresentation().self()
-
-      moduleWidget.usPatientItemCombobox.setCurrentItem(usPatientShItemID)
-      moduleWidget.mrPatientItemCombobox.setCurrentItem(mrPatientShItemID)
-      slicer.app.processEvents()
-      moduleWidget.usProstateSegmentNameCombobox.setCurrentIndex( moduleWidget.usProstateSegmentNameCombobox.findText(usProstateSegmentName) )
-      moduleWidget.mrProstateSegmentNameCombobox.setCurrentIndex( moduleWidget.mrProstateSegmentNameCombobox.findText(mrProstateSegmentName) )
-      logging.info('Input data selected:')
-      logging.info('  US volume: ' + moduleWidget.logic.usVolumeNode.GetName())
-      logging.info('  US segmentation: ' + moduleWidget.logic.usSegmentationNode.GetName())
-      logging.info('  MR volume: ' + moduleWidget.logic.mrVolumeNode.GetName())
-      logging.info('  MR segmentation: ' + moduleWidget.logic.mrSegmentationNode.GetName())
-
-      moduleWidget.logic.performRegistration()
-
-      #TODO: Enable functions for testing with remote test data
-      # self.TestSection_00_SetupPathsAndNames()
-      # self.TestSection_01A_OpenTempDatabase()
-      # self.TestSection_01B_DownloadData()
-      # self.TestSection_01C_ImportStudy()
-      # self.TestSection_01D_SelectLoadablesAndLoad()
-      # ...
-      # self.TestUtility_ClearDatabase()
+      self.TestSection_00_SetupPathsAndNames()
+      self.TestSection_01A_OpenTempDatabase()
+      self.TestSection_01B_DownloadData()
+      self.TestSection_01C_ImportStudy()
+      self.TestSection_01D_SelectLoadablesAndLoad()
+      self.TestSection_02_PerformRegistration()
+      self.TestSection_03_CalculateSimilarity()
+      self.TestUtility_ClearDatabase()
 
     except Exception, e:
       logging.error('Exception happened! Details:')
@@ -1227,25 +1193,28 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       traceback.print_exc()
       pass
 
-  """TODO: Enable functions for testing with remote test data
   #------------------------------------------------------------------------------
   def TestSection_00_SetupPathsAndNames(self):
-    ProstateMRIUSContourPropagationDir = slicer.app.temporaryPath + '/ProstateMRIUSContourPropagation'
-    if not os.access(ProstateMRIUSContourPropagationDir, os.F_OK):
-      os.mkdir(ProstateMRIUSContourPropagationDir)
+    prostateMRIUSContourPropagationDir = slicer.app.temporaryPath + '/ProstateMRIUSContourPropagation'
+    if not os.access(prostateMRIUSContourPropagationDir, os.F_OK):
+      os.mkdir(prostateMRIUSContourPropagationDir)
 
-    self.dicomDataDir = ProstateMRIUSContourPropagationDir + '/EclipseEntPhantomRtData'
+    self.dicomDataDir = prostateMRIUSContourPropagationDir + '/MRIUSFusionPatient4Dicom'
     if not os.access(self.dicomDataDir, os.F_OK):
       os.mkdir(self.dicomDataDir)
 
-    self.day2DataDir = ProstateMRIUSContourPropagationDir + '/EclipseEntComputedDay2Data'
-    if not os.access(self.day2DataDir, os.F_OK):
-      os.mkdir(self.day2DataDir)
+    self.dicomDatabaseDir = prostateMRIUSContourPropagationDir + '/CtkDicomDatabase'
+    self.dicomZipFilePath = prostateMRIUSContourPropagationDir + '/MRIUSFusionPatient4.zip'
+    self.expectedNumOfFilesInDicomDataDir = 251
+    self.tempDir = prostateMRIUSContourPropagationDir + '/Temp'
 
-    self.dicomDatabaseDir = ProstateMRIUSContourPropagationDir + '/CtkDicomDatabase'
-    self.dicomZipFilePath = ProstateMRIUSContourPropagationDir + '/EclipseEntDicomRt.zip'
-    self.expectedNumOfFilesInDicomDataDir = 142
-    self.tempDir = ProstateMRIUSContourPropagationDir + '/Temp'
+    self.patientName = '0PHYSIQUE^F_MRI_US_4 (PHYEP004)'
+    self.usSegmentationName = '1: RTSTRUCT: OCP RTS v4.2.21'
+    self.usProstateSegmentName = 'target'
+    self.usVolumeName = '1: Oncentra Prostate Image Series'
+    self.mrSegmentationName = '9: RTSTRUCT: Prostate'
+    self.mrProstateSegmentName = 'Prostate'
+    self.mrVolumeName = '4: T2 SPACE RST TRA ISO 3D'
 
     self.setupPathsAndNamesDone = True
 
@@ -1279,28 +1248,28 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
     try:
       import urllib
       downloads = (
-          ('http://slicer.kitware.com/midas3/download/item/101019/EclipseEntPhantomRtData.zip', self.dicomZipFilePath),
+          ('http://slicer.kitware.com/midas3/download/item/318330/MRIUSFusionPatient4.zip', self.dicomZipFilePath),
           )
 
       downloaded = 0
       for url,filePath in downloads:
         if not os.path.exists(filePath) or os.stat(filePath).st_size == 0:
           if downloaded == 0:
-            self.delayDisplay('Downloading Day 1 input data to folder\n' + self.dicomZipFilePath + '.\n\n  It may take a few minutes...',self.delayMs)
+            self.delayDisplay('Downloading input data to folder\n' + self.dicomZipFilePath + '.\n\n  It may take a few minutes...',self.delayMs)
           logging.info('Requesting download from %s...' % (url))
           urllib.urlretrieve(url, filePath)
           downloaded += 1
         else:
-          self.delayDisplay('Day 1 input data has been found in folder ' + self.dicomZipFilePath, self.delayMs)
+          self.delayDisplay('Input data has been found in folder ' + self.dicomZipFilePath, self.delayMs)
       if downloaded > 0:
-        self.delayDisplay('Downloading Day 1 input data finished',self.delayMs)
+        self.delayDisplay('Downloading input data finished',self.delayMs)
 
-      numOfFilesInDicomDataDir = len([name for name in os.listdir(self.dicomDataDir) if os.path.isfile(self.dicomDataDir + '/' + name)])
+      numOfFilesInDicomDataDir = len([file for folderList in [files for root, subdirs, files in os.walk(self.dicomDataDir)] for file in folderList])
       if (numOfFilesInDicomDataDir != self.expectedNumOfFilesInDicomDataDir):
         slicer.app.applicationLogic().Unzip(self.dicomZipFilePath, self.dicomDataDir)
         self.delayDisplay("Unzipping done",self.delayMs)
 
-      numOfFilesInDicomDataDirTest = len([name for name in os.listdir(self.dicomDataDir) if os.path.isfile(self.dicomDataDir + '/' + name)])
+      numOfFilesInDicomDataDirTest = len([file for folderList in [files for root, subdirs, files in os.walk(self.dicomDataDir)] for file in folderList])
       self.assertEqual( numOfFilesInDicomDataDirTest, self.expectedNumOfFilesInDicomDataDir )
 
     except Exception, e:
@@ -1338,7 +1307,6 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
 
     try:
       numOfScalarVolumeNodesBeforeLoad = len( slicer.util.getNodes('vtkMRMLScalarVolumeNode*') )
-      numOfModelHierarchyNodesBeforeLoad = len( slicer.util.getNodes('vtkMRMLModelHierarchyNode*') )
       numOfSegmentationNodesBeforeLoad = len( slicer.util.getNodes('vtkMRMLSegmentationNode*') )
 
       # Choose first patient from the patient list
@@ -1351,7 +1319,7 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       dicomWidget.detailsPopup.offerLoadables(seriesUIDs, 'SeriesUIDList')
       dicomWidget.detailsPopup.examineForLoading()
 
-      # Make sure the loadables are good (RT is assigned to 3 out of 4 and they are selected)
+      # Make sure the loadables are good (RT is assigned to 2 out of 4 and they are selected)
       loadablesByPlugin = dicomWidget.detailsPopup.loadablesByPlugin
       rtFound = False
       loadablesForRt = 0
@@ -1365,21 +1333,127 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
           self.assertTrue( loadable.selected )
 
       self.assertTrue( rtFound )
-      self.assertEqual( loadablesForRt, 3 )
+      self.assertEqual( loadablesForRt, 2 )
 
       dicomWidget.detailsPopup.loadCheckedLoadables()
 
       # Verify that the correct number of objects were loaded
       self.assertEqual( len( slicer.util.getNodes('vtkMRMLScalarVolumeNode*') ), numOfScalarVolumeNodesBeforeLoad + 2 )
-      self.assertEqual( len( slicer.util.getNodes('vtkMRMLModelHierarchyNode*') ), numOfModelHierarchyNodesBeforeLoad + 7 )
-      self.assertEqual( len( slicer.util.getNodes('vtkMRMLSegmentationNode*') ), numOfSegmentationNodesBeforeLoad + 1 )
+      self.assertEqual( len( slicer.util.getNodes('vtkMRMLSegmentationNode*') ), numOfSegmentationNodesBeforeLoad + 2 )
 
     except Exception, e:
       import traceback
       traceback.print_exc()
       self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
       raise Exception("Exception occurred, handled, thrown further to workflow level")
-  """
+
+  #------------------------------------------------------------------------------
+  def TestSection_02_PerformRegistration(self):
+    self.delayDisplay("Perform registration",self.delayMs)
+
+    # Check patient item
+    shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
+    patientShItemID = shNode.GetItemChildWithName(shNode.GetSceneItemID(), self.patientName)
+    self.assertNotEqual(patientShItemID, 0)
+
+    try:
+      slicer.util.selectModule('ProstateMRIUSContourPropagation')
+      moduleWidget = slicer.modules.prostatemriuscontourpropagation.widgetRepresentation().self()
+      moduleWidget.selectInitialPatients()
+
+      # Check patient selections
+      self.assertEqual(moduleWidget.usPatientItemCombobox.currentItem(), patientShItemID)
+      self.assertEqual(moduleWidget.mrPatientItemCombobox.currentItem(), patientShItemID)
+
+      # Check volume selections
+      self.assertIsNotNone(moduleWidget.usVolumeNodeCombobox.currentNode())
+      self.assertEqual(moduleWidget.usVolumeNodeCombobox.currentNode().GetName(), self.usVolumeName)
+      self.assertIsNotNone(moduleWidget.mrVolumeNodeCombobox.currentNode())
+      self.assertEqual(moduleWidget.mrVolumeNodeCombobox.currentNode().GetName(), self.mrVolumeName)
+
+      # Set US segmentation and segment (it needs to be manually changed for this dataset)
+      usSegmentationNode = slicer.util.getNode(self.usSegmentationName)
+      self.assertIsNotNone(usSegmentationNode)
+      moduleWidget.usSegmentationNodeCombobox.setCurrentNode(usSegmentationNode)
+      moduleWidget.usProstateSegmentNameCombobox.setCurrentIndex( moduleWidget.usProstateSegmentNameCombobox.findText(self.usProstateSegmentName) )
+      self.assertEqual(moduleWidget.usProstateSegmentNameCombobox.currentText, self.usProstateSegmentName)
+
+      # Set US segmentation
+      mrSegmentationNode = slicer.util.getNode(self.mrSegmentationName)
+      self.assertIsNotNone(mrSegmentationNode)
+      moduleWidget.mrSegmentationNodeCombobox.setCurrentNode(mrSegmentationNode)
+      self.assertEqual(moduleWidget.mrProstateSegmentNameCombobox.currentText, self.mrProstateSegmentName)
+
+      # Perform registration
+      qt.QApplication.setOverrideCursor(qt.QCursor(qt.Qt.BusyCursor))
+      success = moduleWidget.logic.performRegistration()
+      qt.QApplication.restoreOverrideCursor()
+      self.assertTrue(success)
+
+      # Check transforms
+      preAlignmentTransformNode = slicer.util.getNode('PreAlignmentMri2UsLinearTransform')
+      self.assertIsNotNone(preAlignmentTransformNode)
+      affineTransformNode = slicer.util.getNode('Affine Transform')
+      self.assertIsNotNone(affineTransformNode)
+      deformableTransformNode = slicer.util.getNode('Deformable Transform')
+      self.assertIsNotNone(deformableTransformNode)
+
+      # Set transforms and visualization
+      moduleWidget.onRegistrationSuccessful()
+      self.delayDisplay("Waiting for UI updates",self.delayMs*2)
+      self.assertIsNotNone(mrSegmentationNode.GetParentTransformNode())
+      mrVolumeNode = slicer.util.getNode(self.mrVolumeName)
+      self.assertIsNotNone(mrVolumeNode)
+      self.assertIsNotNone(mrVolumeNode.GetParentTransformNode())
+
+    except Exception, e:
+      import traceback
+      traceback.print_exc()
+      self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
+      raise Exception("Exception occurred, handled, thrown further to workflow level")
+
+  #------------------------------------------------------------------------------
+  def TestSection_03_CalculateSimilarity(self):
+    self.delayDisplay("Calculate similarity",self.delayMs)
+
+    try:
+      moduleWidget = slicer.modules.prostatemriuscontourpropagation.widgetRepresentation().self()
+      moduleWidget.onCalculateSegmentSimilarity()
+      
+      layoutManager = slicer.app.layoutManager()
+      self.assertEqual(layoutManager.layout, slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpTableView)
+      
+      # Check Dice metrics
+      # Note: Allow 5-10% deviation, because the purpose of the test is to make sure the values make sense,
+      #  and comparison was successful, instead of ensuring the registration result is exactly the same
+      # Note: First four rows contain the names of the compared segmentation nodes and segments
+      self.assertIsNotNone(moduleWidget.logic.diceTableNode)
+      diceTable = moduleWidget.logic.diceTableNode.GetTable()
+      self.assertIsNotNone(diceTable)
+      self.assertLess(abs((diceTable.GetValue( 4,1).ToDouble() / 0.94) - 1), 0.05)
+      self.assertLess(abs((diceTable.GetValue( 5,1).ToDouble() / 26) - 1), 0.05)
+      self.assertLess(abs((diceTable.GetValue( 6,1).ToDouble() / 71) - 1), 0.05)
+      self.assertLess(abs((diceTable.GetValue( 7,1).ToDouble() / 1.6) - 1), 0.10)
+      self.assertLess(abs((diceTable.GetValue( 8,1).ToDouble() / 1.2) - 1), 0.10)
+      self.assertLess(abs((diceTable.GetValue(11,1).ToDouble() / 58) - 1), 0.05)
+      self.assertLess(abs((diceTable.GetValue(12,1).ToDouble() / 60) - 1), 0.05)
+      # self.assertEqual(diceTable.GetValue( 9,1).ToString(), '(-1.05024, 33.1222, -34.9534)')
+      # self.assertEqual(diceTable.GetValue(10,1).ToString(), '(-0.960999, 33.0069, -34.9166)')
+
+      # Check Hausdorff metrics (allow maximum 1% deviation)
+      # (first four rows contain the names of the compared segmentation nodes and segments)
+      self.assertIsNotNone(moduleWidget.logic.hausdorffTableNode)
+      hausdorffTable = moduleWidget.logic.hausdorffTableNode.GetTable()
+      self.assertIsNotNone(hausdorffTable)
+      self.assertLess(abs((hausdorffTable.GetValue(4,1).ToDouble() / 3.8) - 1), 0.10)
+      self.assertLess(abs((hausdorffTable.GetValue(5,1).ToDouble() / 0.8) - 1), 0.10)
+      self.assertLess(abs((hausdorffTable.GetValue(6,1).ToDouble() / 2) - 1), 0.10)
+
+    except Exception, e:
+      import traceback
+      traceback.print_exc()
+      self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
+      raise Exception("Exception occurred, handled, thrown further to workflow level")
 
   #------------------------------------------------------------------------------
   # Mandatory functions
