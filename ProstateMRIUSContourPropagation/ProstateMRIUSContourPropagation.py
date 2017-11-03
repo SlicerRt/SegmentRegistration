@@ -430,7 +430,6 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
 
   #------------------------------------------------------------------------------
   def populateProstateSegmentCombobox(self, segmentationNode, prostateSegmentNameCombobox):
-    import vtkSegmentationCorePython as vtkSegmentationCore
     validSegmentation = segmentationNode is not None and segmentationNode.GetSegmentation().GetNumberOfSegments() > 0
     prostateSegmentNameCombobox.clear()
     prostateSegmentNameCombobox.enabled = validSegmentation
@@ -607,7 +606,6 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.AddNode(roiNode)
 
     # Determine ROI position
-    import vtkSegmentationCorePython as vtkSegmentationCore
     bounds = [0]*6
     self.mrSegmentationNode.GetSegmentation().GetBounds(bounds)
     center = [(bounds[0]+bounds[1])/2, (bounds[2]+bounds[3])/2, (bounds[4]+bounds[5])/2]
@@ -661,7 +659,6 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
       logging.error('Invalid data selection')
       return
     # Get center of segmentation bounding boxes
-    import vtkSegmentationCorePython as vtkSegmentationCore
     usBounds = [0]*6
     usProstateSegment = self.usSegmentationNode.GetSegmentation().GetSegment(self.usProstateSegmentName)
     if usProstateSegment is None:
@@ -753,9 +750,8 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     displayNode.SetVisibility(False)
 
     # Copy the two prostate segments into the segmentation
-    import vtkSegmentationCorePython as vtkSegmentationCore
     commonSegmentation = self.commonSegmentationNode.GetSegmentation()
-    commonSegmentation.SetMasterRepresentationName(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationPlanarContourRepresentationName())
+    commonSegmentation.SetMasterRepresentationName(slicer.vtkSegmentationConverter.GetSegmentationPlanarContourRepresentationName())
     ret1 = commonSegmentation.CopySegmentFromSegmentation(self.mrSegmentationNode.GetSegmentation(), self.mrProstateSegmentName)
     ret2 = commonSegmentation.CopySegmentFromSegmentation(self.usSegmentationNode.GetSegmentation(), self.usProstateSegmentName)
     if ret1 is False or ret2 is False:
@@ -764,12 +760,12 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     # Set volume geometry from MR volume
     mrIjk2RasMatrix = vtk.vtkMatrix4x4()
     self.mrCroppedVolumeNode.GetIJKToRASMatrix(mrIjk2RasMatrix)
-    mrGeometry = vtkSegmentationCore.vtkSegmentationConverter.SerializeImageGeometry(mrIjk2RasMatrix, self.mrCroppedVolumeNode.GetImageData())
-    geometryParameterName = vtkSegmentationCore.vtkSegmentationConverter.GetReferenceImageGeometryParameterName()
+    mrGeometry = slicer.vtkSegmentationConverter.SerializeImageGeometry(mrIjk2RasMatrix, self.mrCroppedVolumeNode.GetImageData())
+    geometryParameterName = slicer.vtkSegmentationConverter.GetReferenceImageGeometryParameterName()
     commonSegmentation.SetConversionParameter(geometryParameterName, mrGeometry)
 
     # Make sure labelmaps are created
-    commonSegmentation.CreateRepresentation(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    commonSegmentation.CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
 
     # Export segment binary labelmaps to labelmap nodes
     self.usProstateLabelmap = slicer.vtkMRMLLabelMapVolumeNode()
@@ -783,14 +779,15 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     self.mrProstateLabelmap.CreateDefaultDisplayNodes()
 
     usProstateSegment = commonSegmentation.GetSegment(self.usProstateSegmentName)
-    usProstateOrientedImageData = usProstateSegment.GetRepresentation(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    usProstateOrientedImageData = usProstateSegment.GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
     mrProstateSegment = commonSegmentation.GetSegment(self.mrProstateSegmentName)
     mrOrientedImageData = slicer.vtkSlicerSegmentationsModuleLogic.CreateOrientedImageDataFromVolumeNode(self.mrCroppedVolumeNode)
-    mrProstateOrientedImageData = mrProstateSegment.GetRepresentation(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
-    paddedUsProstateOrientedImageData = vtkSegmentationCore.vtkOrientedImageData()
-    ret1 = vtkSegmentationCore.vtkOrientedImageDataResample.PadImageToContainImage(usProstateOrientedImageData, mrOrientedImageData, paddedUsProstateOrientedImageData)
-    paddedMrProstateOrientedImageData = vtkSegmentationCore.vtkOrientedImageData()
-    ret2 = vtkSegmentationCore.vtkOrientedImageDataResample.PadImageToContainImage(mrProstateOrientedImageData, mrOrientedImageData, paddedMrProstateOrientedImageData)
+    mrOrientedImageData.UnRegister(None)
+    mrProstateOrientedImageData = mrProstateSegment.GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    paddedUsProstateOrientedImageData = slicer.vtkOrientedImageData()
+    ret1 = slicer.vtkOrientedImageDataResample.PadImageToContainImage(usProstateOrientedImageData, mrOrientedImageData, paddedUsProstateOrientedImageData)
+    paddedMrProstateOrientedImageData = slicer.vtkOrientedImageData()
+    ret2 = slicer.vtkOrientedImageDataResample.PadImageToContainImage(mrProstateOrientedImageData, mrOrientedImageData, paddedMrProstateOrientedImageData)
     if ret1 is False or ret2 is False:
       logging.error('Failed to get padded oriented images')
 
@@ -934,11 +931,10 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
       if self.resampleMrToUsGeometryForExport:
         # Create resampled MR volume in US reference frame so that the exported structure set is smoother
         # (more fidelity to the original segmentation, in the granularity of the reference US image where the procedure is done)
-        import vtkSegmentationCorePython as vtkSegmentationCore
         mrVolumeNodeCurrentTransformNode = self.mrVolumeNode.GetParentTransformNode() # So that we can set restore it later
         self.mrVolumeNode.SetAndObserveTransformNodeID(self.bsplineTransformNode.GetID()) # Make sure the deformable transform is the parent when copying
         mrOrientedImageData = slicer.vtkSlicerSegmentationsModuleLogic.CreateOrientedImageDataFromVolumeNode(self.mrVolumeNode)
-        vtkSegmentationCore.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(mrOrientedImageData, usOrientedImageData, mrOrientedImageData, True, True)
+        slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(mrOrientedImageData, usOrientedImageData, mrOrientedImageData, True, True)
         mrImageToWorldMatrix = vtk.vtkMatrix4x4()
         mrOrientedImageData.GetImageToWorldMatrix(mrImageToWorldMatrix)
         self.mrVolumeNodeForExport.SetIJKToRASMatrix(mrImageToWorldMatrix)
@@ -1041,7 +1037,6 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     if self.usSegmentationNode is None or self.mrSegmentationNode is None:
       logging.error('Failed to get segmentations')
       return
-    import vtkSegmentationCorePython as vtkSegmentationCore
     usProstateSegment = self.usSegmentationNode.GetSegmentation().GetSegment(self.usProstateSegmentName)
     mrProstateSegment = self.mrSegmentationNode.GetSegmentation().GetSegment(self.mrProstateSegmentName)
     if usProstateSegment is None or mrProstateSegment is None:

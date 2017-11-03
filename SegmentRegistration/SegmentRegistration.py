@@ -298,7 +298,6 @@ class SegmentRegistrationWidget(ScriptedLoadableModuleWidget):
   #------------------------------------------------------------------------------
   #------------------------------------------------------------------------------
   def populateSegmentCombobox(self, segmentationNode, segmentNameCombobox):
-    import vtkSegmentationCorePython as vtkSegmentationCore
     validSegmentation = segmentationNode is not None and segmentationNode.GetSegmentation().GetNumberOfSegments() > 0
     segmentNameCombobox.clear()
     segmentNameCombobox.enabled = validSegmentation
@@ -377,7 +376,6 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.AddNode(roiNode)
 
     # Determine ROI position
-    import vtkSegmentationCorePython as vtkSegmentationCore
     bounds = [0]*6
     self.movingSegmentationNode.GetSegmentation().GetBounds(bounds)
     center = [(bounds[0]+bounds[1])/2, (bounds[2]+bounds[3])/2, (bounds[4]+bounds[5])/2]
@@ -429,7 +427,6 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
       logging.error('Invalid data selection')
       return
     # Get center of segmentation bounding boxes
-    import vtkSegmentationCorePython as vtkSegmentationCore
     fixedBounds = [0]*6
     fixedSegment = self.fixedSegmentationNode.GetSegmentation().GetSegment(self.fixedSegmentName)
     if fixedSegment is None:
@@ -521,9 +518,8 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     displayNode.SetVisibility(False)
 
     # Copy the two prostate segments into the segmentation
-    import vtkSegmentationCorePython as vtkSegmentationCore
     commonSegmentation = self.commonSegmentationNode.GetSegmentation()
-    commonSegmentation.SetMasterRepresentationName(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationPlanarContourRepresentationName())
+    commonSegmentation.SetMasterRepresentationName(slicer.vtkSegmentationConverter.GetSegmentationPlanarContourRepresentationName())
     ret1 = commonSegmentation.CopySegmentFromSegmentation(self.movingSegmentationNode.GetSegmentation(), self.movingSegmentName)
     ret2 = commonSegmentation.CopySegmentFromSegmentation(self.fixedSegmentationNode.GetSegmentation(), self.fixedSegmentName)
     if ret1 is False or ret2 is False:
@@ -532,12 +528,12 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     # Set volume geometry from moving volume
     mrIjk2RasMatrix = vtk.vtkMatrix4x4()
     self.movingCroppedVolumeNode.GetIJKToRASMatrix(mrIjk2RasMatrix)
-    movingGeometry = vtkSegmentationCore.vtkSegmentationConverter.SerializeImageGeometry(mrIjk2RasMatrix, self.movingCroppedVolumeNode.GetImageData())
-    geometryParameterName = vtkSegmentationCore.vtkSegmentationConverter.GetReferenceImageGeometryParameterName()
+    movingGeometry = slicer.vtkSegmentationConverter.SerializeImageGeometry(mrIjk2RasMatrix, self.movingCroppedVolumeNode.GetImageData())
+    geometryParameterName = slicer.vtkSegmentationConverter.GetReferenceImageGeometryParameterName()
     commonSegmentation.SetConversionParameter(geometryParameterName, movingGeometry)
 
     # Make sure labelmaps are created
-    commonSegmentation.CreateRepresentation(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    commonSegmentation.CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
 
     # Export segment binary labelmaps to labelmap nodes
     self.fixedLabelmap = slicer.vtkMRMLLabelMapVolumeNode()
@@ -551,14 +547,15 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     self.movingLabelmap.CreateDefaultDisplayNodes()
 
     fixedSegment = commonSegmentation.GetSegment(self.fixedSegmentName)
-    fixedStructureOrientedImageData = fixedSegment.GetRepresentation(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    fixedStructureOrientedImageData = fixedSegment.GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
     movingSegment = commonSegmentation.GetSegment(self.movingSegmentName)
     movingVolumeOrientedImageData = slicer.vtkSlicerSegmentationsModuleLogic.CreateOrientedImageDataFromVolumeNode(self.movingCroppedVolumeNode)
-    movingStructureOrientedImageData = movingSegment.GetRepresentation(vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
-    paddedfixedStructureOrientedImageData = vtkSegmentationCore.vtkOrientedImageData()
-    ret1 = vtkSegmentationCore.vtkOrientedImageDataResample.PadImageToContainImage(fixedStructureOrientedImageData, movingVolumeOrientedImageData, paddedfixedStructureOrientedImageData)
-    paddedMovingStructureOrientedImageData = vtkSegmentationCore.vtkOrientedImageData()
-    ret2 = vtkSegmentationCore.vtkOrientedImageDataResample.PadImageToContainImage(movingStructureOrientedImageData, movingVolumeOrientedImageData, paddedMovingStructureOrientedImageData)
+    movingVolumeOrientedImageData.UnRegister(None)
+    movingStructureOrientedImageData = movingSegment.GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    paddedfixedStructureOrientedImageData = slicer.vtkOrientedImageData()
+    ret1 = slicer.vtkOrientedImageDataResample.PadImageToContainImage(fixedStructureOrientedImageData, movingVolumeOrientedImageData, paddedfixedStructureOrientedImageData)
+    paddedMovingStructureOrientedImageData = slicer.vtkOrientedImageData()
+    ret2 = slicer.vtkOrientedImageDataResample.PadImageToContainImage(movingStructureOrientedImageData, movingVolumeOrientedImageData, paddedMovingStructureOrientedImageData)
     if ret1 is False or ret2 is False:
       logging.error('Failed to get padded oriented images')
 
