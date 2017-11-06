@@ -413,6 +413,8 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
       tableView.hideRow(2)
       tableView.hideRow(3)
       tableView.setColumnWidth(0,120)
+    else:
+      logging.error('Similarity calculation failed')
 
   #------------------------------------------------------------------------------
   def onCalculateFiducialErrors(self):
@@ -427,6 +429,8 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
       tableView.showRow(1)
       tableView.showRow(2)
       tableView.showRow(3)
+    else:
+      logging.error('Fiducial error calculation failed')
 
   #------------------------------------------------------------------------------
   def populateProstateSegmentCombobox(self, segmentationNode, prostateSegmentNameCombobox):
@@ -1067,7 +1071,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
       return False
 
     # Calculate Dice, Hausdorff
-    if self.segmentComparisonNode is None:
+    if self.segmentComparisonNode is None or self.segmentComparisonNode.GetScene() is None:
       self.segmentComparisonNode = slicer.vtkMRMLSegmentComparisonNode()
       self.segmentComparisonNode.SetName(slicer.mrmlScene.GenerateUniqueName('MRI-US_SegmentComparison'))
       slicer.mrmlScene.AddNode(self.segmentComparisonNode)
@@ -1419,19 +1423,19 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       self.assertEqual(layoutManager.layout, slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpTableView)
       
       # Check Dice metrics
-      # Note: Allow 5-10% deviation, because the purpose of the test is to make sure the values make sense,
+      # Note: Allow some deviation, because the purpose of the test is to make sure the values make sense,
       #  and comparison was successful, instead of ensuring the registration result is exactly the same
       # Note: First four rows contain the names of the compared segmentation nodes and segments
       self.assertIsNotNone(moduleWidget.logic.diceTableNode)
       diceTable = moduleWidget.logic.diceTableNode.GetTable()
       self.assertIsNotNone(diceTable)
-      self.assertLess(abs((diceTable.GetValue( 4,1).ToDouble() / 0.94) - 1), 0.05)
-      self.assertLess(abs((diceTable.GetValue( 5,1).ToDouble() / 26) - 1), 0.05)
-      self.assertLess(abs((diceTable.GetValue( 6,1).ToDouble() / 71) - 1), 0.05)
-      self.assertLess(abs((diceTable.GetValue( 7,1).ToDouble() / 1.6) - 1), 0.10)
-      self.assertLess(abs((diceTable.GetValue( 8,1).ToDouble() / 1.2) - 1), 0.10)
-      self.assertLess(abs((diceTable.GetValue(11,1).ToDouble() / 58) - 1), 0.05)
-      self.assertLess(abs((diceTable.GetValue(12,1).ToDouble() / 60) - 1), 0.05)
+      self.assertGreater(diceTable.GetValue( 4,1).ToDouble(), 0.9)
+      self.assertGreater(diceTable.GetValue( 5,1).ToDouble(), 25)
+      self.assertLess(diceTable.GetValue( 6,1).ToDouble(), 75)
+      self.assertLess(diceTable.GetValue( 7,1).ToDouble(), 2)
+      self.assertLess(diceTable.GetValue( 8,1).ToDouble(), 1.5)
+      self.assertAlmostEqual(diceTable.GetValue(11,1).ToDouble() / 2, 29.5, 0)
+      self.assertAlmostEqual(diceTable.GetValue(12,1).ToDouble() / 2, 29.5, 0)
       # self.assertEqual(diceTable.GetValue( 9,1).ToString(), '(-1.05024, 33.1222, -34.9534)')
       # self.assertEqual(diceTable.GetValue(10,1).ToString(), '(-0.960999, 33.0069, -34.9166)')
 
@@ -1440,9 +1444,9 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       self.assertIsNotNone(moduleWidget.logic.hausdorffTableNode)
       hausdorffTable = moduleWidget.logic.hausdorffTableNode.GetTable()
       self.assertIsNotNone(hausdorffTable)
-      self.assertLess(abs((hausdorffTable.GetValue(4,1).ToDouble() / 3.8) - 1), 0.10)
-      self.assertLess(abs((hausdorffTable.GetValue(5,1).ToDouble() / 0.8) - 1), 0.10)
-      self.assertLess(abs((hausdorffTable.GetValue(6,1).ToDouble() / 2) - 1), 0.10)
+      self.assertLess(hausdorffTable.GetValue(4,1).ToDouble(), 5)
+      self.assertLess(hausdorffTable.GetValue(5,1).ToDouble(), 1)
+      self.assertLess(hausdorffTable.GetValue(6,1).ToDouble(), 2.5)
 
     except Exception, e:
       import traceback
