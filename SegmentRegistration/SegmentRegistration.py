@@ -2,6 +2,7 @@ import os
 import unittest
 import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
+from DICOMLib import DICOMUtils
 import logging
 
 invalidShItemID = slicer.vtkMRMLSubjectHierarchyNode.GetInvalidItemID()
@@ -22,7 +23,7 @@ class SegmentRegistration(ScriptedLoadableModule):
     ScriptedLoadableModule.__init__(self, parent)
     self.parent.title = "Segment Registration"
     self.parent.categories = ["Registration"]
-    self.parent.dependencies = ["SubjectHierarchy", "Segmentations", "BRAINSFit", "DistanceMapBasedRegistration"]
+    self.parent.dependencies = ["SubjectHierarchy", "Segmentations", "CropVolume", "BRAINSFit", "DistanceMapBasedRegistration"]
     self.parent.contributors = ["Csaba Pinter (Queen's)"]
     self.parent.helpText = """
     Registration of segmented structures, and transformation of the whole segmentation (and its anatomical image) with the resulting transformation. Supports affine and deformable.
@@ -129,13 +130,6 @@ class SegmentRegistrationWidget(ScriptedLoadableModuleWidget):
     if self.developerMode and self.testingButtonsVisible:
       # Add empty row
       self.registrationCollapsibleButtonLayout.addRow(' ', None)
-
-      # Self test button
-      self.selfTestButton = qt.QPushButton("Run self test")
-      self.selfTestButton.setMaximumWidth(300)
-      self.selfTestButton.name = "selfTestButton"
-      self.registrationCollapsibleButtonLayout.addWidget(self.selfTestButton)
-      self.selfTestButton.connect('clicked()', self.onSelfTest)
 
       # Crop moving button
       self.cropMovingVolumeButton = qt.QPushButton("Crop moving volume")
@@ -311,13 +305,6 @@ class SegmentRegistrationWidget(ScriptedLoadableModuleWidget):
       segment = segmentationNode.GetSegmentation().GetSegment(segmentID)
       segmentNameCombobox.addItem(segment.GetName(),segmentID)
 
-  #------------------------------------------------------------------------------
-  def onSelfTest(self):
-    slicer.mrmlScene.Clear(0)
-    tester = SegmentRegistrationTest()
-    tester.widget = self
-    tester.test_SegmentRegistration_FullTest()
-
 #
 # -----------------------------------------------------------------------------
 # SegmentRegistrationLogic
@@ -448,7 +435,7 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     moving2FixedTranslation = [fixedCenter[0]-movingCenter[0], fixedCenter[1]-movingCenter[1], fixedCenter[2]-movingCenter[2]]
     logging.info('Moving to fixed segment translation: ' + repr(moving2FixedTranslation))
     self.preAlignmentMoving2FixedLinearTransform = slicer.vtkMRMLLinearTransformNode()
-    self.preAlignmentMoving2FixedLinearTransform.SetName(slicer.mrmlScene.GenerateUniqueName('preAlignmentMoving2FixedLinearTransform'))
+    self.preAlignmentMoving2FixedLinearTransform.SetName(slicer.mrmlScene.GenerateUniqueName('PreAlignmentMoving2FixedLinearTransform'))
     slicer.mrmlScene.AddNode(self.preAlignmentMoving2FixedLinearTransform)
     moving2FixedMatrix = vtk.vtkMatrix4x4()
     moving2FixedMatrix.SetElement(0,3,moving2FixedTranslation[0])
@@ -688,65 +675,139 @@ class SegmentRegistrationTest(ScriptedLoadableModuleTest):
 
   #------------------------------------------------------------------------------
   def test_SegmentRegistration_FullTest(self):
-    pass
-    """
     try:
       # Check for modules
-      self.assertIsNotNone( slicer.modules.dicomrtimportexport )
+      self.assertIsNotNone( slicer.modules.dicomrtimportexport ) # The test uses RT but the module itself does not
       self.assertIsNotNone( slicer.modules.subjecthierarchy )
       self.assertIsNotNone( slicer.modules.segmentations )
       self.assertIsNotNone( slicer.modules.brainsfit )
       self.assertIsNotNone( slicer.modules.distancemapbasedregistration )
       self.assertIsNotNone( slicer.modules.cropvolume )
 
-      # Temporary testing method: Load local test data #TODO: Temporary testing
-      usPatientName = '0physique^Patient pour export DICOM'
-      fixedSegmentName = 'target'
-      mrPatientName = 'F_MRI_US_1'
-      movingSegmentName = 'Pros'
-      dicomWidget = slicer.modules.dicom.widgetRepresentation().self()
-      from DICOMLib import DICOMUtils
-      DICOMUtils.loadPatientByName(usPatientName)
-      DICOMUtils.loadPatientByName(mrPatientName)
-      usPatientShNode = slicer.util.getNode(usPatientName + slicer.vtkMRMLSubjectHierarchyConstants.GetSubjectHierarchyNodeNamePostfix())
-      mrPatientShNode = slicer.util.getNode(mrPatientName + slicer.vtkMRMLSubjectHierarchyConstants.GetSubjectHierarchyNodeNamePostfix())
-      logging.info('Test data loaded')
-
-      # Temporary testing method: Set UI selection and run workflow by that #TODO: Temporary testing
-      if hasattr(self,'widget') and self.widget is not None:
-        moduleWidget = self.widget
-      else:
-        # This does not work after reloaded from UI, that's why we need the test button and the widget member
-        moduleWidget = slicer.modules.segmentregistration.widgetRepresentation().self()
-
-      moduleWidget.usPatientNodeCombobox.setCurrentNode(usPatientShNode)
-      moduleWidget.mrPatientNodeCombobox.setCurrentNode(mrPatientShNode)
-      slicer.app.processEvents()
-      moduleWidget.fixedSegmentNameCombobox.setCurrentIndex( moduleWidget.fixedSegmentNameCombobox.findText(fixedSegmentName) )
-      moduleWidget.movingSegmentNameCombobox.setCurrentIndex( moduleWidget.movingSegmentNameCombobox.findText(movingSegmentName) )
-      logging.info('Input data selected:')
-      logging.info('  US volume: ' + moduleWidget.logic.fixedVolumeNode.GetName())
-      logging.info('  US segmentation: ' + moduleWidget.logic.fixedSegmentationNode.GetName())
-      logging.info('  MR volume: ' + moduleWidget.logic.movingVolumeNode.GetName())
-      logging.info('  MR segmentation: ' + moduleWidget.logic.movingSegmentationNode.GetName())
-
-      moduleWidget.logic.performRegistration()
-
-      #TODO: Enable functions for testing with remote test data
-      # self.TestSection_00_SetupPathsAndNames()
-      # self.TestSection_01A_OpenTempDatabase()
-      # self.TestSection_01B_DownloadData()
-      # self.TestSection_01C_ImportStudy()
-      # self.TestSection_01D_SelectLoadablesAndLoad()
-      # ...
-      # self.TestUtility_ClearDatabase()
+      self.TestSection_00_SetupPathsAndNames()
+      self.TestSection_01_LoadDicomData()
+      self.TestSection_02_PerformRegistration()
 
     except Exception, e:
       logging.error('Exception happened! Details:')
       import traceback
       traceback.print_exc()
-      pass
-    """
+
+  #------------------------------------------------------------------------------
+  def TestSection_00_SetupPathsAndNames(self):
+    segmentRegistrationDir = slicer.app.temporaryPath + '/SegmentRegistration'
+    if not os.access(segmentRegistrationDir, os.F_OK):
+      os.mkdir(segmentRegistrationDir)
+
+    self.dicomDataDir = segmentRegistrationDir + '/MRIUSFusionPatient4Dicom'
+    if not os.access(self.dicomDataDir, os.F_OK):
+      os.mkdir(self.dicomDataDir)
+
+    self.dicomDatabaseDir = segmentRegistrationDir + '/CtkDicomDatabase'
+    self.dicomZipFileUrl = 'http://slicer.kitware.com/midas3/download/item/318330/MRIUSFusionPatient4.zip'
+    self.dicomZipFilePath = segmentRegistrationDir + '/MRIUSFusionPatient4.zip'
+    self.expectedNumOfFilesInDicomDataDir = 251
+    self.tempDir = segmentRegistrationDir + '/Temp'
+
+    self.patientName = '0PHYSIQUE^F_MRI_US_4 (PHYEP004)'
+    self.usSegmentationName = '1: RTSTRUCT: OCP RTS v4.2.21'
+    self.usProstateSegmentName = 'target'
+    self.usVolumeName = '1: Oncentra Prostate Image Series'
+    self.mrSegmentationName = '9: RTSTRUCT: Prostate'
+    self.mrProstateSegmentName = 'Prostate'
+    self.mrVolumeName = '4: T2 SPACE RST TRA ISO 3D'
+
+    self.setupPathsAndNamesDone = True
+
+  #------------------------------------------------------------------------------
+  def TestSection_01_LoadDicomData(self):
+    try:
+      # Open test database and empty it
+      with DICOMUtils.TemporaryDICOMDatabase(self.dicomDatabaseDir) as db:
+        self.assertTrue( db.isOpen )
+        self.assertEqual( slicer.dicomDatabase, db)
+
+        # Download, unzip, import, and load data. Verify selected plugins and loaded nodes.
+        selectedPlugins = { 'Scalar Volume':2, 'RT':2 }
+        loadedNodes = { 'vtkMRMLScalarVolumeNode':2, \
+                        'vtkMRMLSegmentationNode':2 }
+        with DICOMUtils.LoadDICOMFilesToDatabase( \
+            self.dicomZipFileUrl, self.dicomZipFilePath, \
+            self.dicomDataDir, self.expectedNumOfFilesInDicomDataDir, \
+            {}, loadedNodes) as success:
+          self.assertTrue(success)
+
+    except Exception, e:
+      import traceback
+      traceback.print_exc()
+      self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
+      raise Exception("Exception occurred, handled, thrown further to workflow level")
+
+  #------------------------------------------------------------------------------
+  def TestSection_02_PerformRegistration(self):
+    self.delayDisplay("Perform registration",self.delayMs)
+
+    # Check patient item
+    shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
+    patientShItemID = shNode.GetItemChildWithName(shNode.GetSceneItemID(), self.patientName)
+    self.assertNotEqual(patientShItemID, 0)
+
+    try:
+      slicer.util.selectModule('SegmentRegistration')
+      moduleWidget = slicer.modules.segmentregistration.widgetRepresentation().self()
+
+      # Make volume selections
+      usVolumeNode = slicer.util.getNode(self.usVolumeName)
+      self.assertIsNotNone(usVolumeNode)
+      moduleWidget.fixedVolumeNodeCombobox.setCurrentNode(usVolumeNode)
+
+      mrVolumeNode = slicer.util.getNode(self.mrVolumeName)
+      self.assertIsNotNone(mrVolumeNode)
+      moduleWidget.movingVolumeNodeCombobox.setCurrentNode(mrVolumeNode)
+
+      # Set fixed segmentation and segment
+      usSegmentationNode = slicer.util.getNode(self.usSegmentationName)
+      self.assertIsNotNone(usSegmentationNode)
+      moduleWidget.fixedSegmentationNodeCombobox.setCurrentNode(usSegmentationNode)
+      moduleWidget.fixedSegmentNameCombobox.setCurrentIndex(
+        moduleWidget.fixedSegmentNameCombobox.findText(self.usProstateSegmentName) )
+      self.assertEqual(moduleWidget.fixedSegmentNameCombobox.currentText, self.usProstateSegmentName)
+
+      # Set moving segmentation and segment
+      mrSegmentationNode = slicer.util.getNode(self.mrSegmentationName)
+      self.assertIsNotNone(mrSegmentationNode)
+      moduleWidget.movingSegmentationNodeCombobox.setCurrentNode(mrSegmentationNode)
+      moduleWidget.movingSegmentNameCombobox.setCurrentIndex(
+        moduleWidget.movingSegmentNameCombobox.findText(self.mrProstateSegmentName) )
+      self.assertEqual(moduleWidget.movingSegmentNameCombobox.currentText, self.mrProstateSegmentName)
+
+      # Perform registration
+      qt.QApplication.setOverrideCursor(qt.QCursor(qt.Qt.BusyCursor))
+      success = moduleWidget.logic.performRegistration()
+      qt.QApplication.restoreOverrideCursor()
+      self.assertTrue(success)
+
+      # Check transforms
+      preAlignmentTransformNode = slicer.util.getNode('PreAlignmentMoving2FixedLinearTransform')
+      self.assertIsNotNone(preAlignmentTransformNode)
+      affineTransformNode = slicer.util.getNode('Affine Transform')
+      self.assertIsNotNone(affineTransformNode)
+      deformableTransformNode = slicer.util.getNode('Deformable Transform')
+      self.assertIsNotNone(deformableTransformNode)
+
+      # Set transforms and visualization
+      moduleWidget.onRegistrationSuccessful()
+      self.delayDisplay("Waiting for UI updates",self.delayMs*2)
+      self.assertIsNotNone(mrSegmentationNode.GetParentTransformNode())
+      mrVolumeNode = slicer.util.getNode(self.mrVolumeName)
+      self.assertIsNotNone(mrVolumeNode)
+      self.assertIsNotNone(mrVolumeNode.GetParentTransformNode())
+
+    except Exception, e:
+      import traceback
+      traceback.print_exc()
+      self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
+      raise Exception("Exception occurred, handled, thrown further to workflow level")
 
   #------------------------------------------------------------------------------
   # Mandatory functions
@@ -768,18 +829,3 @@ class SegmentRegistrationTest(ScriptedLoadableModuleTest):
     self.setUp()
 
     self.test_SegmentRegistration_FullTest()
-
-  #------------------------------------------------------------------------------
-  # Utility functions
-  #------------------------------------------------------------------------------
-  def TestUtility_ClearDatabase(self):
-    self.delayDisplay("Clear database",self.delayMs)
-
-    slicer.dicomDatabase.initializeDatabase()
-    slicer.dicomDatabase.closeDatabase()
-    self.assertFalse( slicer.dicomDatabase.isOpen )
-
-    self.delayDisplay("Restoring original database directory",self.delayMs)
-    if self.originalDatabaseDirectory:
-      dicomWidget = slicer.modules.dicom.widgetRepresentation().self()
-      dicomWidget.onDatabaseDirectoryChanged(self.originalDatabaseDirectory)
