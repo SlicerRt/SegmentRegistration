@@ -121,7 +121,7 @@ class SegmentRegistrationWidget(ScriptedLoadableModuleWidget):
 
     # Perform registration button
     self.performRegistrationButton = qt.QPushButton("Perform registration")
-    self.performRegistrationButton.toolTip = "Prostate contour propagation from  MRI to US"
+    self.performRegistrationButton.toolTip = "Deformable registration between two structures, originally developed for contour propagation between modalities"
     self.performRegistrationButton.name = "performRegistrationButton"
     self.registrationCollapsibleButtonLayout.addRow(self.performRegistrationButton)
     self.performRegistrationButton.connect('clicked()', self.onPerformRegistration)
@@ -130,6 +130,13 @@ class SegmentRegistrationWidget(ScriptedLoadableModuleWidget):
     if self.developerMode and self.testingButtonsVisible:
       # Add empty row
       self.registrationCollapsibleButtonLayout.addRow(' ', None)
+
+      # Self test button
+      self.selfTestButton = qt.QPushButton("Run self test")
+      self.selfTestButton.setMaximumWidth(300)
+      self.selfTestButton.name = "selfTestButton"
+      self.registrationCollapsibleButtonLayout.addWidget(self.selfTestButton)
+      self.selfTestButton.connect('clicked()', self.onSelfTest)
 
       # Crop moving button
       self.cropMovingVolumeButton = qt.QPushButton("Crop moving volume")
@@ -261,7 +268,7 @@ class SegmentRegistrationWidget(ScriptedLoadableModuleWidget):
 
   #------------------------------------------------------------------------------
   def onCreateContourLabelmaps(self):
-    self.logic.createProstateContourLabelmaps()
+    self.logic.createContourLabelmaps()
 
   #------------------------------------------------------------------------------
   def onPerformDistanceBasedRegistration(self):
@@ -288,6 +295,13 @@ class SegmentRegistrationWidget(ScriptedLoadableModuleWidget):
       self.logic.applyRigidTransformation()
     elif self.deformableRegistrationRadioButton.checked:
       self.logic.applyDeformableTransformation()
+
+  #------------------------------------------------------------------------------
+  def onSelfTest(self):
+    slicer.mrmlScene.Clear(0)
+    tester = SegmentRegistrationTest()
+    tester.widget = self
+    tester.test_SegmentRegistration_FullTest()
 
   #------------------------------------------------------------------------------
   #------------------------------------------------------------------------------
@@ -347,7 +361,7 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     self.cropMovingVolume()
     self.preAlignSegmentations()
     self.resampleFixedVolume()
-    self.createProstateContourLabelmaps()
+    self.createContourLabelmaps()
     return self.performDistanceBasedRegistration()
 
   #------------------------------------------------------------------------------
@@ -368,11 +382,11 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     center = [(bounds[0]+bounds[1])/2, (bounds[2]+bounds[3])/2, (bounds[4]+bounds[5])/2]
     roiNode.SetXYZ(center[0], center[1], center[2])
 
-    # Determine ROI size (add prostate width along RL axis, square slice, add height/2 along IS)
+    # Determine ROI size (add structure width along RL axis, square slice, add height/2 along IS)
     #TODO: Support tilted volumes
-    prostateLR3 = (bounds[1]-bounds[0]) * 3
-    prostateIS2 = (bounds[5]-bounds[4]) * 2
-    radius = [prostateLR3/2, prostateLR3/2, prostateIS2/2]
+    structureLR3 = (bounds[1]-bounds[0]) * 3
+    structureIS2 = (bounds[5]-bounds[4]) * 2
+    radius = [structureLR3/2, structureLR3/2, structureIS2/2]
     roiNode.SetRadiusXYZ(radius[0], radius[1], radius[2])
 
     # Crop moving volume
@@ -492,35 +506,29 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     shNode.SetItemParent(resampledFixedVolumeShItemID, fixedStudyItemID)
 
   #------------------------------------------------------------------------------
-  def createProstateContourLabelmaps(self):
-    logging.info('Creating prostate contour labelmaps')
+  def createContourLabelmaps(self):
+    logging.info('Creating contour labelmaps')
     if self.movingSegmentationNode is None or self.fixedSegmentationNode is None:
       logging.error('Unable to access segmentations')
-    # Create new segmentation for the two prostate contours so that they have the same image geometry
-    self.commonSegmentationNode = slicer.vtkMRMLSegmentationNode()
-    self.commonSegmentationNode.SetName(slicer.mrmlScene.GenerateUniqueName('CommonSegmentation'))
-    slicer.mrmlScene.AddNode(self.commonSegmentationNode)
-    self.commonSegmentationNode.CreateDefaultDisplayNodes()
-    displayNode = self.commonSegmentationNode.GetDisplayNode()
-    displayNode.SetVisibility(False)
+    
+    # Make sure the segmentations have the labelmaps
+    self.movingSegmentationNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    self.fixedSegmentationNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    # Get labelmap oriented image data
+    movingOrientedImageData = slicer.vtkOrientedImageData()
+    movingOrientedImageData.DeepCopy(self.movingSegmentationNode.GetSegmentation().GetSegment(self.movingSegmentName).GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()))
+    fixedOrientedImageData = slicer.vtkOrientedImageData()
+    fixedOrientedImageData.DeepCopy(self.fixedSegmentationNode.GetSegmentation().GetSegment(self.fixedSegmentName).GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()))
 
-    # Copy the two prostate segments into the segmentation
-    commonSegmentation = self.commonSegmentationNode.GetSegmentation()
-    commonSegmentation.SetMasterRepresentationName(slicer.vtkSegmentationConverter.GetSegmentationPlanarContourRepresentationName())
-    ret1 = commonSegmentation.CopySegmentFromSegmentation(self.movingSegmentationNode.GetSegmentation(), self.movingSegmentName)
-    ret2 = commonSegmentation.CopySegmentFromSegmentation(self.fixedSegmentationNode.GetSegmentation(), self.fixedSegmentName)
-    if ret1 is False or ret2 is False:
-      logging.error('Failed to copy to common segmentation')
+    # Get moving anatomy volume geometry
+    movingAnatomyOrientedImageData = slicer.vtkSlicerSegmentationsModuleLogic.CreateOrientedImageDataFromVolumeNode(self.movingCroppedVolumeNode)
+    movingAnatomyOrientedImageData.UnRegister(None)
 
-    # Set volume geometry from moving volume
-    mrIjk2RasMatrix = vtk.vtkMatrix4x4()
-    self.movingCroppedVolumeNode.GetIJKToRASMatrix(mrIjk2RasMatrix)
-    movingGeometry = slicer.vtkSegmentationConverter.SerializeImageGeometry(mrIjk2RasMatrix, self.movingCroppedVolumeNode.GetImageData())
-    geometryParameterName = slicer.vtkSegmentationConverter.GetReferenceImageGeometryParameterName()
-    commonSegmentation.SetConversionParameter(geometryParameterName, movingGeometry)
-
-    # Make sure labelmaps are created
-    commonSegmentation.CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    # Ensure same geometry of oriented image data
+    if not slicer.vtkOrientedImageDataResample.DoGeometriesMatch(movingOrientedImageData, movingAnatomyOrientedImageData):
+      slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(movingOrientedImageData, movingAnatomyOrientedImageData, movingOrientedImageData, True, True)
+    if not slicer.vtkOrientedImageDataResample.DoGeometriesMatch(fixedOrientedImageData, movingAnatomyOrientedImageData):
+      slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(fixedOrientedImageData, movingAnatomyOrientedImageData, fixedOrientedImageData, True, True)
 
     # Export segment binary labelmaps to labelmap nodes
     self.fixedLabelmap = slicer.vtkMRMLLabelMapVolumeNode()
@@ -533,23 +541,10 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.AddNode(self.movingLabelmap)
     self.movingLabelmap.CreateDefaultDisplayNodes()
 
-    fixedSegment = commonSegmentation.GetSegment(self.fixedSegmentName)
-    fixedStructureOrientedImageData = fixedSegment.GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
-    movingSegment = commonSegmentation.GetSegment(self.movingSegmentName)
-    movingVolumeOrientedImageData = slicer.vtkSlicerSegmentationsModuleLogic.CreateOrientedImageDataFromVolumeNode(self.movingCroppedVolumeNode)
-    movingVolumeOrientedImageData.UnRegister(None)
-    movingStructureOrientedImageData = movingSegment.GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
-    paddedfixedStructureOrientedImageData = slicer.vtkOrientedImageData()
-    ret1 = slicer.vtkOrientedImageDataResample.PadImageToContainImage(fixedStructureOrientedImageData, movingVolumeOrientedImageData, paddedfixedStructureOrientedImageData)
-    paddedMovingStructureOrientedImageData = slicer.vtkOrientedImageData()
-    ret2 = slicer.vtkOrientedImageDataResample.PadImageToContainImage(movingStructureOrientedImageData, movingVolumeOrientedImageData, paddedMovingStructureOrientedImageData)
+    ret1 = slicer.vtkSlicerSegmentationsModuleLogic.CreateLabelmapVolumeFromOrientedImageData(fixedOrientedImageData, self.fixedLabelmap)
+    ret2 = slicer.vtkSlicerSegmentationsModuleLogic.CreateLabelmapVolumeFromOrientedImageData(movingOrientedImageData, self.movingLabelmap)
     if ret1 is False or ret2 is False:
-      logging.error('Failed to get padded oriented images')
-
-    ret1 = slicer.vtkSlicerSegmentationsModuleLogic.CreateLabelmapVolumeFromOrientedImageData(paddedfixedStructureOrientedImageData, self.fixedLabelmap)
-    ret2 = slicer.vtkSlicerSegmentationsModuleLogic.CreateLabelmapVolumeFromOrientedImageData(paddedMovingStructureOrientedImageData, self.movingLabelmap)
-    if ret1 is False or ret2 is False:
-      logging.error('Failed to create padded labelmaps')
+      logging.error('Failed to create labelmap nodes')
 
     # Add labelmaps to the corresponding studies in subject hierarchy
     shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
@@ -594,7 +589,6 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
   def removeIntermedateNodes(self):
     # Remove nodes created during preprocessing for the distance based registration
     slicer.mrmlScene.RemoveNode(self.fixedResampledVolumeNode)
-    slicer.mrmlScene.RemoveNode(self.commonSegmentationNode)
     slicer.mrmlScene.RemoveNode(self.fixedLabelmap)
     slicer.mrmlScene.RemoveNode(self.movingLabelmap)
 
@@ -642,7 +636,7 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     fixedSegment = self.fixedSegmentationNode.GetSegmentation().GetSegment(self.fixedSegmentName)
     movingSegment = self.movingSegmentationNode.GetSegmentation().GetSegment(self.movingSegmentName)
     if fixedSegment is None or movingSegment is None:
-      logging.error('Failed to get prostate segments')
+      logging.error('Failed to get segments')
       return
 
     # Make fixed segment red with 50% opacity
@@ -711,10 +705,10 @@ class SegmentRegistrationTest(ScriptedLoadableModuleTest):
 
     self.patientName = '0PHYSIQUE^F_MRI_US_4 (PHYEP004)'
     self.usSegmentationName = '1: RTSTRUCT: OCP RTS v4.2.21'
-    self.usProstateSegmentName = 'target'
+    self.usSegmentName = 'target'
     self.usVolumeName = '1: Oncentra Prostate Image Series'
     self.mrSegmentationName = '9: RTSTRUCT: Prostate'
-    self.mrProstateSegmentName = 'Prostate'
+    self.mrSegmentName = 'Prostate'
     self.mrVolumeName = '4: T2 SPACE RST TRA ISO 3D'
 
     self.setupPathsAndNamesDone = True
@@ -770,16 +764,16 @@ class SegmentRegistrationTest(ScriptedLoadableModuleTest):
       self.assertIsNotNone(usSegmentationNode)
       moduleWidget.fixedSegmentationNodeCombobox.setCurrentNode(usSegmentationNode)
       moduleWidget.fixedSegmentNameCombobox.setCurrentIndex(
-        moduleWidget.fixedSegmentNameCombobox.findText(self.usProstateSegmentName) )
-      self.assertEqual(moduleWidget.fixedSegmentNameCombobox.currentText, self.usProstateSegmentName)
+        moduleWidget.fixedSegmentNameCombobox.findText(self.usSegmentName) )
+      self.assertEqual(moduleWidget.fixedSegmentNameCombobox.currentText, self.usSegmentName)
 
       # Set moving segmentation and segment
       mrSegmentationNode = slicer.util.getNode(self.mrSegmentationName)
       self.assertIsNotNone(mrSegmentationNode)
       moduleWidget.movingSegmentationNodeCombobox.setCurrentNode(mrSegmentationNode)
       moduleWidget.movingSegmentNameCombobox.setCurrentIndex(
-        moduleWidget.movingSegmentNameCombobox.findText(self.mrProstateSegmentName) )
-      self.assertEqual(moduleWidget.movingSegmentNameCombobox.currentText, self.mrProstateSegmentName)
+        moduleWidget.movingSegmentNameCombobox.findText(self.mrSegmentName) )
+      self.assertEqual(moduleWidget.movingSegmentNameCombobox.currentText, self.mrSegmentName)
 
       # Perform registration
       qt.QApplication.setOverrideCursor(qt.QCursor(qt.Qt.BusyCursor))
