@@ -429,7 +429,8 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
       return
     # Get center of segmentation bounding boxes
     fixedBounds = [0]*6
-    fixedSegment = self.fixedSegmentationNode.GetSegmentation().GetSegment(self.fixedSegmentName)
+    fixedSegmentID = self.fixedSegmentationNode.GetSegmentation().GetSegmentIdBySegmentName(self.fixedSegmentName)
+    fixedSegment = self.fixedSegmentationNode.GetSegmentation().GetSegment(fixedSegmentID)
     if fixedSegment is None:
       logging.error('Failed to get fixed segment')
       return
@@ -437,7 +438,8 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     fixedCenter = [(fixedBounds[1]+fixedBounds[0])/2, (fixedBounds[3]+fixedBounds[2])/2, (fixedBounds[5]+fixedBounds[4])/2]
     logging.info('Fixed segment bounds: ' + repr(fixedBounds))
     movingBounds = [0]*6
-    movingSegment = self.movingSegmentationNode.GetSegmentation().GetSegment(self.movingSegmentName)
+    movingSegmentID = self.movingSegmentationNode.GetSegmentation().GetSegmentIdBySegmentName(self.movingSegmentName)
+    movingSegment = self.movingSegmentationNode.GetSegmentation().GetSegment(movingSegmentID)
     if movingSegment is None:
       logging.error('Failed to get moving segment')
       return
@@ -510,7 +512,7 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     logging.info('Creating contour labelmaps')
     if self.movingSegmentationNode is None or self.fixedSegmentationNode is None:
       logging.error('Unable to access segmentations')
-    
+
     # Make sure the segmentations have the labelmaps
     self.movingSegmentationNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
     self.fixedSegmentationNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())

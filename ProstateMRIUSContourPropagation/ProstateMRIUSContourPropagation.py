@@ -468,7 +468,7 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
     shNode.GetItemChildren(shNode.GetSceneItemID(), children)
     for i in xrange(children.GetNumberOfIds()):
       child = children.GetId(i)
-      if shNode.GetItemLevel(child) == slicer.vtkMRMLSubjectHierarchyConstants.GetDICOMLevelPatient(): 
+      if shNode.GetItemLevel(child) == slicer.vtkMRMLSubjectHierarchyConstants.GetDICOMLevelPatient():
         # Try to guess patient selection by patient name
         name = shNode.GetItemName(child)
         if "US" in name and not usPatientItemCandidate:
@@ -664,7 +664,8 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
       return
     # Get center of segmentation bounding boxes
     usBounds = [0]*6
-    usProstateSegment = self.usSegmentationNode.GetSegmentation().GetSegment(self.usProstateSegmentName)
+    usProstateSegmentID = self.usSegmentationNode.GetSegmentation().GetSegmentIdBySegmentName(self.usProstateSegmentName)
+    usProstateSegment = self.usSegmentationNode.GetSegmentation().GetSegment(usProstateSegmentID)
     if usProstateSegment is None:
       logging.error('Failed to get US prostate segment')
       return
@@ -672,7 +673,8 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     usProstateCenter = [(usBounds[1]+usBounds[0])/2, (usBounds[3]+usBounds[2])/2, (usBounds[5]+usBounds[4])/2]
     logging.info('US prostate bounds: ' + repr(usBounds))
     mrBounds = [0]*6
-    mrProstateSegment = self.mrSegmentationNode.GetSegmentation().GetSegment(self.mrProstateSegmentName)
+    mrProstateSegmentID = self.mrSegmentationNode.GetSegmentation().GetSegmentIdBySegmentName(self.mrProstateSegmentName)
+    mrProstateSegment = self.mrSegmentationNode.GetSegmentation().GetSegment(mrProstateSegmentID)
     if mrProstateSegment is None:
       logging.error('Failed to get MR prostate segment')
       return
@@ -745,7 +747,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     logging.info('Creating prostate contour labelmaps')
     if self.mrSegmentationNode is None or self.usSegmentationNode is None:
       logging.error('Unable to access segmentations')
-    
+
     # Make sure the prostate segmentations have the labelmaps
     self.mrSegmentationNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
     self.usSegmentationNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
@@ -1398,10 +1400,10 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
     try:
       moduleWidget = slicer.modules.prostatemriuscontourpropagation.widgetRepresentation().self()
       moduleWidget.onCalculateSegmentSimilarity()
-      
+
       layoutManager = slicer.app.layoutManager()
       self.assertEqual(layoutManager.layout, slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpTableView)
-      
+
       # Check Dice metrics
       # Note: Allow some deviation, because the purpose of the test is to make sure the values make sense,
       #  and comparison was successful, instead of ensuring the registration result is exactly the same
