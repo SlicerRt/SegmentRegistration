@@ -508,7 +508,9 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     self.usPatientShItemID = invalidShItemID
     self.usProstateSegmentName = None
     self.usVolumeNode = None
+    self.usVolumeHardenedNode = None
     self.usSegmentationNode = None
+    self.usSegmentationHardenedNode = None
     self.usResampledVolumeNode = None
     self.usProstateLabelmap = None
     self.usFiducialsNode = None
@@ -517,6 +519,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     self.mrProstateSegmentName = None
     self.mrVolumeNode = None
     self.mrSegmentationNode = None
+    self.mrSegmentationHardenedNode = None
     self.mrCroppedVolumeNode = None
     self.mrProstateLabelmap = None
     self.mrFiducialsNode = None
@@ -729,8 +732,17 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     self.usResampledVolumeNode.SetName(self.usVolumeNode.GetName() + '_Resampled_1x1x1mm')
     slicer.mrmlScene.AddNode(self.usResampledVolumeNode)
 
+    # Clone input volume and harden transform if any (the CLI does not handle parent transforms)
+    shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
+    usVolumeShItemID = shNode.GetItemByDataNode(self.usVolumeNode)
+    usVolumeNodeCloneName = self.usVolumeNode.GetName() + '_HardenedCopy'
+    usVolumeHardenedShItemID = slicer.vtkSlicerSubjectHierarchyModuleLogic.CloneSubjectHierarchyItem(shNode, usVolumeShItemID, usVolumeNodeCloneName)
+    shNode.SetItemParent(usVolumeHardenedShItemID, shNode.GetItemParent(usVolumeShItemID))
+    self.usVolumeHardenedNode = shNode.GetItemDataNode(usVolumeHardenedShItemID)
+    slicer.vtkSlicerTransformLogic.hardenTransform(self.usVolumeHardenedNode)
+
     # Resample
-    resampleParameters = {'outputPixelSpacing':'1,1,1', 'interpolationType':'lanczos', 'InputVolume':self.usVolumeNode.GetID(), 'OutputVolume':self.usResampledVolumeNode.GetID()}
+    resampleParameters = {'outputPixelSpacing':'1,1,1', 'interpolationType':'lanczos', 'InputVolume':self.usVolumeHardenedNode.GetID(), 'OutputVolume':self.usResampledVolumeNode.GetID()}
     slicer.cli.run(slicer.modules.resamplescalarvolume, None, resampleParameters, wait_for_completion=True)
 
     # Add resampled US volume to the same study as the original US
@@ -748,14 +760,31 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     if self.mrSegmentationNode is None or self.usSegmentationNode is None:
       logging.error('Unable to access segmentations')
 
+    # Clone segmentations and harden transform if any (so that the labelmap geometry is correct)
+    shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
+    mrSegmentationShItemID = shNode.GetItemByDataNode(self.mrSegmentationNode)
+    mrSegmentationNodeCloneName = self.mrSegmentationNode.GetName() + '_HardenedCopy'
+    mrSegmentationHardenedShItemID = slicer.vtkSlicerSubjectHierarchyModuleLogic.CloneSubjectHierarchyItem(shNode, mrSegmentationShItemID, mrSegmentationNodeCloneName)
+    shNode.SetItemParent(mrSegmentationHardenedShItemID, shNode.GetItemParent(mrSegmentationShItemID))
+    self.mrSegmentationHardenedNode = shNode.GetItemDataNode(mrSegmentationHardenedShItemID)
+    slicer.vtkSlicerTransformLogic.hardenTransform(self.mrSegmentationHardenedNode)
+    usSegmentationShItemID = shNode.GetItemByDataNode(self.usSegmentationNode)
+    usSegmentationNodeCloneName = self.usSegmentationNode.GetName() + '_HardenedCopy'
+    usSegmentationHardenedShItemID = slicer.vtkSlicerSubjectHierarchyModuleLogic.CloneSubjectHierarchyItem(shNode, usSegmentationShItemID, usSegmentationNodeCloneName)
+    shNode.SetItemParent(usSegmentationHardenedShItemID, shNode.GetItemParent(usSegmentationShItemID))
+    self.usSegmentationHardenedNode = shNode.GetItemDataNode(usSegmentationHardenedShItemID)
+    slicer.vtkSlicerTransformLogic.hardenTransform(self.usSegmentationHardenedNode)
+
     # Make sure the prostate segmentations have the labelmaps
-    self.mrSegmentationNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
-    self.usSegmentationNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    self.mrSegmentationHardenedNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    self.usSegmentationHardenedNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
     # Get labelmap oriented image data
     mrProstateOrientedImageData = slicer.vtkOrientedImageData()
-    mrProstateOrientedImageData.DeepCopy(self.mrSegmentationNode.GetSegmentation().GetSegment(self.mrProstateSegmentName).GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()))
+    mrProstateSegmentID = self.mrSegmentationHardenedNode.GetSegmentation().GetSegmentIdBySegmentName(self.mrProstateSegmentName)
+    mrProstateOrientedImageData.DeepCopy(self.mrSegmentationHardenedNode.GetSegmentation().GetSegment(mrProstateSegmentID).GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()))
     usProstateOrientedImageData = slicer.vtkOrientedImageData()
-    usProstateOrientedImageData.DeepCopy(self.usSegmentationNode.GetSegmentation().GetSegment(self.usProstateSegmentName).GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()))
+    usProstateSegmentID = self.usSegmentationHardenedNode.GetSegmentation().GetSegmentIdBySegmentName(self.usProstateSegmentName)
+    usProstateOrientedImageData.DeepCopy(self.usSegmentationHardenedNode.GetSegmentation().GetSegment(usProstateSegmentID).GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()))
 
     # Get MR volume geometry
     mrOrientedImageData = slicer.vtkSlicerSegmentationsModuleLogic.CreateOrientedImageDataFromVolumeNode(self.mrCroppedVolumeNode)
@@ -831,6 +860,9 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.RemoveNode(self.usResampledVolumeNode)
     slicer.mrmlScene.RemoveNode(self.usProstateLabelmap)
     slicer.mrmlScene.RemoveNode(self.mrProstateLabelmap)
+    slicer.mrmlScene.RemoveNode(self.usVolumeHardenedNode)
+    slicer.mrmlScene.RemoveNode(self.mrSegmentationHardenedNode)
+    slicer.mrmlScene.RemoveNode(self.usSegmentationHardenedNode)
 
     # Remove nodes created by distance based registration
     slicer.mrmlScene.RemoveNode(slicer.util.getNode('US_Prostate_Padded-Cropped'))
@@ -1023,8 +1055,10 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     if self.usSegmentationNode is None or self.mrSegmentationNode is None:
       logging.error('Failed to get segmentations')
       return
-    usProstateSegment = self.usSegmentationNode.GetSegmentation().GetSegment(self.usProstateSegmentName)
-    mrProstateSegment = self.mrSegmentationNode.GetSegmentation().GetSegment(self.mrProstateSegmentName)
+    usProstateSegmentID = self.usSegmentationNode.GetSegmentation().GetSegmentIdBySegmentName(self.usProstateSegmentName)
+    usProstateSegment = self.usSegmentationNode.GetSegmentation().GetSegment(usProstateSegmentID)
+    mrProstateSegmentID = self.mrSegmentationNode.GetSegmentation().GetSegmentIdBySegmentName(self.mrProstateSegmentName)
+    mrProstateSegment = self.mrSegmentationNode.GetSegmentation().GetSegment(mrProstateSegmentID)
     if usProstateSegment is None or mrProstateSegment is None:
       logging.error('Failed to get prostate segments')
       return
@@ -1035,7 +1069,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     if usSegmentationDisplayNode is None:
       logging.error('Failed to get US segmentation display node')
       return
-    usSegmentationDisplayNode.SetSegmentOpacity(self.usProstateSegmentName, 0.5)
+    usSegmentationDisplayNode.SetSegmentOpacity(usProstateSegmentID, 0.5)
 
     # Make MR prostate segment light blue with 50% opacity
     mrProstateSegment.SetColor(0.43,0.72,0.82)
@@ -1043,7 +1077,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     if mrSegmentationDisplayNode is None:
       logging.error('Failed to get MRI segmentation display node')
       return
-    mrSegmentationDisplayNode.SetSegmentOpacity(self.mrProstateSegmentName, 0.5)
+    mrSegmentationDisplayNode.SetSegmentOpacity(mrProstateSegmentID, 0.5)
 
   #------------------------------------------------------------------------------
   def calculateSegmentSimilarity(self):
@@ -1071,9 +1105,11 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     segmentComparisonLogic = slicer.modules.segmentcomparison.logic()
 
     self.segmentComparisonNode.SetAndObserveReferenceSegmentationNode(self.usSegmentationNode)
-    self.segmentComparisonNode.SetReferenceSegmentID(self.usProstateSegmentName)
+    usProstateSegmentID = self.usSegmentationNode.GetSegmentation().GetSegmentIdBySegmentName(self.usProstateSegmentName)
+    self.segmentComparisonNode.SetReferenceSegmentID(usProstateSegmentID)
     self.segmentComparisonNode.SetAndObserveCompareSegmentationNode(self.mrSegmentationNode)
-    self.segmentComparisonNode.SetCompareSegmentID(self.mrProstateSegmentName)
+    mrProstateSegmentID = self.mrSegmentationNode.GetSegmentation().GetSegmentIdBySegmentName(self.mrProstateSegmentName)
+    self.segmentComparisonNode.SetCompareSegmentID(mrProstateSegmentID)
 
     diceError = segmentComparisonLogic.ComputeDiceStatistics(self.segmentComparisonNode)
     hausdorffError = segmentComparisonLogic.ComputeHausdorffDistances(self.segmentComparisonNode)

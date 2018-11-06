@@ -251,8 +251,12 @@ class SegmentRegistrationWidget(ScriptedLoadableModuleWidget):
 
   #------------------------------------------------------------------------------
   def onPerformRegistration(self):
+    qt.QApplication.setOverrideCursor(qt.QCursor(qt.Qt.BusyCursor))
+
     if self.logic.performRegistration():
       self.onRegistrationSuccessful()
+
+    qt.QApplication.restoreOverrideCursor()
 
   #------------------------------------------------------------------------------
   def onCropMovingVolume(self):
@@ -336,13 +340,16 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
   def __init__(self):
     self.fixedSegmentName = None
     self.fixedVolumeNode = None
+    self.fixedVolumeHardenedNode = None
     self.fixedSegmentationNode = None
+    self.fixedSegmentationHardenedNode = None
     self.fixedResampledVolumeNode = None
     self.fixedLabelmap = None
 
     self.movingSegmentName = None
     self.movingVolumeNode = None
     self.movingSegmentationNode = None
+    self.movingSegmentationHardenedNode = None
     self.movingCroppedVolumeNode = None
     self.movingLabelmap = None
     self.movingVolumeNodeForExport = None
@@ -489,13 +496,22 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
       logging.error('Unable to access fixed volume')
       return
 
-    # Create putput volume
+    # Create output volume
     self.fixedResampledVolumeNode = slicer.vtkMRMLScalarVolumeNode()
     self.fixedResampledVolumeNode.SetName(self.fixedVolumeNode.GetName() + '_Resampled_1x1x1mm')
     slicer.mrmlScene.AddNode(self.fixedResampledVolumeNode)
 
+    # Clone input volume and harden transform if any (the CLI does not handle parent transforms)
+    shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
+    fixedVolumeShItemID = shNode.GetItemByDataNode(self.fixedVolumeNode)
+    fixedVolumeNodeCloneName = self.fixedVolumeNode.GetName() + '_HardenedCopy'
+    fixedVolumeHardenedShItemID = slicer.vtkSlicerSubjectHierarchyModuleLogic.CloneSubjectHierarchyItem(shNode, fixedVolumeShItemID, fixedVolumeNodeCloneName)
+    shNode.SetItemParent(fixedVolumeHardenedShItemID, shNode.GetItemParent(fixedVolumeShItemID))
+    self.fixedVolumeHardenedNode = shNode.GetItemDataNode(fixedVolumeHardenedShItemID)
+    slicer.vtkSlicerTransformLogic.hardenTransform(self.fixedVolumeHardenedNode)
+
     # Resample
-    resampleParameters = {'outputPixelSpacing':'1,1,1', 'interpolationType':'lanczos', 'InputVolume':self.fixedVolumeNode.GetID(), 'OutputVolume':self.fixedResampledVolumeNode.GetID()}
+    resampleParameters = {'outputPixelSpacing':'1,1,1', 'interpolationType':'lanczos', 'InputVolume':self.fixedVolumeHardenedNode.GetID(), 'OutputVolume':self.fixedResampledVolumeNode.GetID()}
     slicer.cli.run(slicer.modules.resamplescalarvolume, None, resampleParameters, wait_for_completion=True)
 
     # Add resampled fixed volume to the same study as the original fixed volume
@@ -513,14 +529,31 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     if self.movingSegmentationNode is None or self.fixedSegmentationNode is None:
       logging.error('Unable to access segmentations')
 
+    # Clone segmentations and harden transform if any (so that the labelmap geometry is correct)
+    shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
+    movingSegmentationShItemID = shNode.GetItemByDataNode(self.movingSegmentationNode)
+    movingSegmentationNodeCloneName = self.movingSegmentationNode.GetName() + '_HardenedCopy'
+    movingSegmentationHardenedShItemID = slicer.vtkSlicerSubjectHierarchyModuleLogic.CloneSubjectHierarchyItem(shNode, movingSegmentationShItemID, movingSegmentationNodeCloneName)
+    shNode.SetItemParent(movingSegmentationHardenedShItemID, shNode.GetItemParent(movingSegmentationShItemID))
+    self.movingSegmentationHardenedNode = shNode.GetItemDataNode(movingSegmentationHardenedShItemID)
+    slicer.vtkSlicerTransformLogic.hardenTransform(self.movingSegmentationHardenedNode)
+    fixedSegmentationShItemID = shNode.GetItemByDataNode(self.fixedSegmentationNode)
+    fixedSegmentationNodeCloneName = self.fixedSegmentationNode.GetName() + '_HardenedCopy'
+    fixedSegmentationHardenedShItemID = slicer.vtkSlicerSubjectHierarchyModuleLogic.CloneSubjectHierarchyItem(shNode, fixedSegmentationShItemID, fixedSegmentationNodeCloneName)
+    shNode.SetItemParent(fixedSegmentationHardenedShItemID, shNode.GetItemParent(fixedSegmentationShItemID))
+    self.fixedSegmentationHardenedNode = shNode.GetItemDataNode(fixedSegmentationHardenedShItemID)
+    slicer.vtkSlicerTransformLogic.hardenTransform(self.fixedSegmentationHardenedNode)
+
     # Make sure the segmentations have the labelmaps
-    self.movingSegmentationNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
-    self.fixedSegmentationNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    self.movingSegmentationHardenedNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
+    self.fixedSegmentationHardenedNode.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
     # Get labelmap oriented image data
     movingOrientedImageData = slicer.vtkOrientedImageData()
-    movingOrientedImageData.DeepCopy(self.movingSegmentationNode.GetSegmentation().GetSegment(self.movingSegmentName).GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()))
+    movingSegmentID = self.movingSegmentationHardenedNode.GetSegmentation().GetSegmentIdBySegmentName(self.movingSegmentName)
+    movingOrientedImageData.DeepCopy(self.movingSegmentationHardenedNode.GetSegmentation().GetSegment(movingSegmentID).GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()))
     fixedOrientedImageData = slicer.vtkOrientedImageData()
-    fixedOrientedImageData.DeepCopy(self.fixedSegmentationNode.GetSegmentation().GetSegment(self.fixedSegmentName).GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()))
+    fixedSegmentID = self.fixedSegmentationHardenedNode.GetSegmentation().GetSegmentIdBySegmentName(self.fixedSegmentName)
+    fixedOrientedImageData.DeepCopy(self.fixedSegmentationHardenedNode.GetSegmentation().GetSegment(fixedSegmentID).GetRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()))
 
     # Get moving anatomy volume geometry
     movingAnatomyOrientedImageData = slicer.vtkSlicerSegmentationsModuleLogic.CreateOrientedImageDataFromVolumeNode(self.movingCroppedVolumeNode)
@@ -593,6 +626,9 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.RemoveNode(self.fixedResampledVolumeNode)
     slicer.mrmlScene.RemoveNode(self.fixedLabelmap)
     slicer.mrmlScene.RemoveNode(self.movingLabelmap)
+    slicer.mrmlScene.RemoveNode(self.fixedVolumeHardenedNode)
+    slicer.mrmlScene.RemoveNode(self.movigSegmentationHardenedNode)
+    slicer.mrmlScene.RemoveNode(self.fixedSegmentationHardenedNode)
 
     # Remove nodes created by distance based registration
     slicer.mrmlScene.RemoveNode(slicer.util.getNode('Fixed_Structure_Padded-Cropped'))
@@ -635,8 +671,10 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     if self.fixedSegmentationNode is None or self.movingSegmentationNode is None:
       logging.error('Failed to get segmentations')
     import vtkSegmentationCorePython as vtkSegmentationCore
-    fixedSegment = self.fixedSegmentationNode.GetSegmentation().GetSegment(self.fixedSegmentName)
-    movingSegment = self.movingSegmentationNode.GetSegmentation().GetSegment(self.movingSegmentName)
+    fixedSegmentID = self.fixedSegmentationHardenedNode.GetSegmentation().GetSegmentIdBySegmentName(self.fixedSegmentName)
+    fixedSegment = self.fixedSegmentationNode.GetSegmentation().GetSegment(fixedSegmentID)
+    movingSegmentID = self.movingSegmentationHardenedNode.GetSegmentation().GetSegmentIdBySegmentName(self.movingSegmentName)
+    movingSegment = self.movingSegmentationNode.GetSegmentation().GetSegment(movingSegmentID)
     if fixedSegment is None or movingSegment is None:
       logging.error('Failed to get segments')
       return
@@ -647,7 +685,7 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     if fixedSegmentationDisplayNode is None:
       logging.error('Failed to get fixed segmentation display node')
       return
-    fixedSegmentationDisplayNode.SetSegmentOpacity(self.fixedSegmentName, 0.5)
+    fixedSegmentationDisplayNode.SetSegmentOpacity(fixedSegmentID, 0.5)
 
     # Make moving segment light blue with 50% opacity
     movingSegment.SetColor(0.43,0.72,0.82)
@@ -655,7 +693,7 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     if movingSegmentationDisplayNode is None:
       logging.error('Failed to get moving segmentation display node')
       return
-    movingSegmentationDisplayNode.SetSegmentOpacity(self.movingSegmentName, 0.5)
+    movingSegmentationDisplayNode.SetSegmentOpacity(movingSegmentID, 0.5)
 
 
 #
