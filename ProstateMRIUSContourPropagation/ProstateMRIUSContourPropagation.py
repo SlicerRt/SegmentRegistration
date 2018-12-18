@@ -791,10 +791,12 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     mrOrientedImageData.UnRegister(None)
 
     # Ensure same geometry of oriented image data
-    if not slicer.vtkOrientedImageDataResample.DoGeometriesMatch(mrProstateOrientedImageData, mrOrientedImageData):
-      slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(mrProstateOrientedImageData, mrOrientedImageData, mrProstateOrientedImageData, True, True)
-    if not slicer.vtkOrientedImageDataResample.DoGeometriesMatch(usProstateOrientedImageData, mrOrientedImageData):
-      slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(usProstateOrientedImageData, mrOrientedImageData, usProstateOrientedImageData, True, True)
+    if not slicer.vtkOrientedImageDataResample.DoGeometriesMatch(mrProstateOrientedImageData, mrOrientedImageData) \
+        or not slicer.vtkOrientedImageDataResample.DoExtentsMatch(mrProstateOrientedImageData, mrOrientedImageData):
+      slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(mrProstateOrientedImageData, mrOrientedImageData, mrProstateOrientedImageData)
+    if not slicer.vtkOrientedImageDataResample.DoGeometriesMatch(usProstateOrientedImageData, mrOrientedImageData) \
+        or not slicer.vtkOrientedImageDataResample.DoExtentsMatch(usProstateOrientedImageData, mrOrientedImageData):
+      slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(usProstateOrientedImageData, mrOrientedImageData, usProstateOrientedImageData)
 
     # Export segment binary labelmaps to labelmap nodes
     self.usProstateLabelmap = slicer.vtkMRMLLabelMapVolumeNode()

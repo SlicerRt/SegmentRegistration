@@ -560,10 +560,12 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     movingAnatomyOrientedImageData.UnRegister(None)
 
     # Ensure same geometry of oriented image data
-    if not slicer.vtkOrientedImageDataResample.DoGeometriesMatch(movingOrientedImageData, movingAnatomyOrientedImageData):
-      slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(movingOrientedImageData, movingAnatomyOrientedImageData, movingOrientedImageData, True, True)
-    if not slicer.vtkOrientedImageDataResample.DoGeometriesMatch(fixedOrientedImageData, movingAnatomyOrientedImageData):
-      slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(fixedOrientedImageData, movingAnatomyOrientedImageData, fixedOrientedImageData, True, True)
+    if not slicer.vtkOrientedImageDataResample.DoGeometriesMatch(movingOrientedImageData, movingAnatomyOrientedImageData) \
+        or not slicer.vtkOrientedImageDataResample.DoExtentsMatch(movingOrientedImageData, movingAnatomyOrientedImageData):
+      slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(movingOrientedImageData, movingAnatomyOrientedImageData, movingOrientedImageData)
+    if not slicer.vtkOrientedImageDataResample.DoGeometriesMatch(fixedOrientedImageData, movingAnatomyOrientedImageData) \
+        or not slicer.vtkOrientedImageDataResample.DoExtentsMatch(fixedOrientedImageData, movingAnatomyOrientedImageData):
+      slicer.vtkOrientedImageDataResample.ResampleOrientedImageToReferenceOrientedImage(fixedOrientedImageData, movingAnatomyOrientedImageData, fixedOrientedImageData)
 
     # Export segment binary labelmaps to labelmap nodes
     self.fixedLabelmap = slicer.vtkMRMLLabelMapVolumeNode()
@@ -627,7 +629,7 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.RemoveNode(self.fixedLabelmap)
     slicer.mrmlScene.RemoveNode(self.movingLabelmap)
     slicer.mrmlScene.RemoveNode(self.fixedVolumeHardenedNode)
-    slicer.mrmlScene.RemoveNode(self.movigSegmentationHardenedNode)
+    slicer.mrmlScene.RemoveNode(self.movingSegmentationHardenedNode)
     slicer.mrmlScene.RemoveNode(self.fixedSegmentationHardenedNode)
 
     # Remove nodes created by distance based registration
@@ -671,12 +673,12 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
     if self.fixedSegmentationNode is None or self.movingSegmentationNode is None:
       logging.error('Failed to get segmentations')
     import vtkSegmentationCorePython as vtkSegmentationCore
-    fixedSegmentID = self.fixedSegmentationHardenedNode.GetSegmentation().GetSegmentIdBySegmentName(self.fixedSegmentName)
+    fixedSegmentID = self.fixedSegmentationNode.GetSegmentation().GetSegmentIdBySegmentName(self.fixedSegmentName)
     fixedSegment = self.fixedSegmentationNode.GetSegmentation().GetSegment(fixedSegmentID)
-    movingSegmentID = self.movingSegmentationHardenedNode.GetSegmentation().GetSegmentIdBySegmentName(self.movingSegmentName)
+    movingSegmentID = self.movingSegmentationNode.GetSegmentation().GetSegmentIdBySegmentName(self.movingSegmentName)
     movingSegment = self.movingSegmentationNode.GetSegmentation().GetSegment(movingSegmentID)
     if fixedSegment is None or movingSegment is None:
-      logging.error('Failed to get segments')
+      logging.error('Failed to get segments for setting up visualization')
       return
 
     # Make fixed segment red with 50% opacity
