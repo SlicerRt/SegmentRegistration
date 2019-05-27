@@ -1206,7 +1206,7 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       self.TestSection_03_CalculateSimilarity()
       self.TestUtility_ClearDatabase()
 
-    except Exception, e:
+    except Exception as e:
       logging.error('Exception happened! Details:')
       import traceback
       traceback.print_exc()
@@ -1256,7 +1256,7 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       self.assertTrue( slicer.dicomDatabase.isOpen )
       slicer.dicomDatabase.initializeDatabase()
 
-    except Exception, e:
+    except Exception as e:
       import traceback
       traceback.print_exc()
       self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
@@ -1291,7 +1291,7 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       numOfFilesInDicomDataDirTest = len([file for folderList in [files for root, subdirs, files in os.walk(self.dicomDataDir)] for file in folderList])
       self.assertEqual( numOfFilesInDicomDataDirTest, self.expectedNumOfFilesInDicomDataDir )
 
-    except Exception, e:
+    except Exception as e:
       import traceback
       traceback.print_exc()
       self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
@@ -1314,7 +1314,7 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       self.assertEqual( len(slicer.dicomDatabase.patients()), 1 )
       self.assertIsNotNone( slicer.dicomDatabase.patients()[0] )
 
-    except Exception, e:
+    except Exception as e:
       import traceback
       traceback.print_exc()
       self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
@@ -1360,7 +1360,7 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       self.assertEqual( len( slicer.util.getNodes('vtkMRMLScalarVolumeNode*') ), numOfScalarVolumeNodesBeforeLoad + 2 )
       self.assertEqual( len( slicer.util.getNodes('vtkMRMLSegmentationNode*') ), numOfSegmentationNodesBeforeLoad + 2 )
 
-    except Exception, e:
+    except Exception as e:
       import traceback
       traceback.print_exc()
       self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
@@ -1425,7 +1425,7 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       self.assertIsNotNone(mrVolumeNode)
       self.assertIsNotNone(mrVolumeNode.GetParentTransformNode())
 
-    except Exception, e:
+    except Exception as e:
       import traceback
       traceback.print_exc()
       self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
@@ -1468,7 +1468,7 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
       self.assertLess(hausdorffTable.GetValue(5,1).ToDouble(), 1)
       self.assertLess(hausdorffTable.GetValue(6,1).ToDouble(), 2.5)
 
-    except Exception, e:
+    except Exception as e:
       import traceback
       traceback.print_exc()
       self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
