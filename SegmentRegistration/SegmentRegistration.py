@@ -724,7 +724,7 @@ class SegmentRegistrationTest(ScriptedLoadableModuleTest):
       self.TestSection_01_LoadDicomData()
       self.TestSection_02_PerformRegistration()
 
-    except Exception, e:
+    except Exception as e:
       logging.error('Exception happened! Details:')
       import traceback
       traceback.print_exc()
@@ -773,7 +773,7 @@ class SegmentRegistrationTest(ScriptedLoadableModuleTest):
             {}, loadedNodes) as success:
           self.assertTrue(success)
 
-    except Exception, e:
+    except Exception as e:
       import traceback
       traceback.print_exc()
       self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
@@ -839,7 +839,7 @@ class SegmentRegistrationTest(ScriptedLoadableModuleTest):
       self.assertIsNotNone(mrVolumeNode)
       self.assertIsNotNone(mrVolumeNode.GetParentTransformNode())
 
-    except Exception, e:
+    except Exception as e:
       import traceback
       traceback.print_exc()
       self.delayDisplay('Test caused exception!\n' + str(e),self.delayMs*2)
