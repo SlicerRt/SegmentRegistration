@@ -318,7 +318,7 @@ class SegmentRegistrationWidget(ScriptedLoadableModuleWidget):
 
     segmentIDs = vtk.vtkStringArray()
     segmentationNode.GetSegmentation().GetSegmentIDs(segmentIDs)
-    for segmentIndex in xrange(0,segmentIDs.GetNumberOfValues()):
+    for segmentIndex in range(0,segmentIDs.GetNumberOfValues()):
       segmentID = segmentIDs.GetValue(segmentIndex)
       segment = segmentationNode.GetSegmentation().GetSegment(segmentID)
       segmentNameCombobox.addItem(segment.GetName(),segmentID)
