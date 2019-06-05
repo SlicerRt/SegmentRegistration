@@ -1265,7 +1265,7 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
   #------------------------------------------------------------------------------
   def TestSection_01B_DownloadData(self):
     try:
-      import urllib
+      import urllib.request, urllib.parse, urllib.error
       downloads = (
           ('http://slicer.kitware.com/midas3/download/item/318330/MRIUSFusionPatient4.zip', self.dicomZipFilePath),
           )
@@ -1276,7 +1276,7 @@ class ProstateMRIUSContourPropagationTest(ScriptedLoadableModuleTest):
           if downloaded == 0:
             self.delayDisplay('Downloading input data to folder\n' + self.dicomZipFilePath + '.\n\n  It may take a few minutes...',self.delayMs)
           logging.info('Requesting download from %s...' % (url))
-          urllib.urlretrieve(url, filePath)
+          urllib.request.urlretrieve(url, filePath)
           downloaded += 1
         else:
           self.delayDisplay('Input data has been found in folder ' + self.dicomZipFilePath, self.delayMs)
