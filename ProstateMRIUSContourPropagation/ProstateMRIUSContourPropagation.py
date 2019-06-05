@@ -442,7 +442,7 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
 
     segmentIDs = vtk.vtkStringArray()
     segmentationNode.GetSegmentation().GetSegmentIDs(segmentIDs)
-    for segmentIndex in xrange(0,segmentIDs.GetNumberOfValues()):
+    for segmentIndex in range(0,segmentIDs.GetNumberOfValues()):
       segmentID = segmentIDs.GetValue(segmentIndex)
       segment = segmentationNode.GetSegmentation().GetSegment(segmentID)
       prostateSegmentNameCombobox.addItem(segment.GetName(),segmentID)
@@ -466,7 +466,7 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
     shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
     children = vtk.vtkIdList()
     shNode.GetItemChildren(shNode.GetSceneItemID(), children)
-    for i in xrange(children.GetNumberOfIds()):
+    for i in range(children.GetNumberOfIds()):
       child = children.GetId(i)
       if shNode.GetItemLevel(child) == slicer.vtkMRMLSubjectHierarchyConstants.GetDICOMLevelPatient():
         # Try to guess patient selection by patient name
@@ -567,7 +567,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     self.usSegmentationNode = None
     usSeriesCollection = vtk.vtkCollection()
     shNode.GetDataNodesInBranch(self.usPatientShItemID, usSeriesCollection)
-    for i in xrange(0,usSeriesCollection.GetNumberOfItems()):
+    for i in range(0,usSeriesCollection.GetNumberOfItems()):
       currentDataNode = usSeriesCollection.GetItemAsObject(i)
       if currentDataNode.IsA('vtkMRMLScalarVolumeNode') and not currentDataNode.IsA('vtkMRMLSegmentationNode'):
         currentSeriesItemID = shNode.GetItemByDataNode(currentDataNode)
@@ -590,7 +590,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     self.mrSegmentationNode = None
     mrSeriesCollection = vtk.vtkCollection()
     shNode.GetDataNodesInBranch(self.mrPatientShItemID, mrSeriesCollection)
-    for i in xrange(0,mrSeriesCollection.GetNumberOfItems()):
+    for i in range(0,mrSeriesCollection.GetNumberOfItems()):
       currentDataNode = mrSeriesCollection.GetItemAsObject(i)
       if currentDataNode.IsA('vtkMRMLScalarVolumeNode') and not currentDataNode.IsA('vtkMRMLSegmentationNode'):
         currentSeriesItemID = shNode.GetItemByDataNode(currentDataNode)
@@ -1159,7 +1159,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
     header.InsertNextValue("2D I-S")
 
     # Calculate error metrics
-    for index in xrange(self.usFiducialsNode.GetNumberOfFiducials()):
+    for index in range(self.usFiducialsNode.GetNumberOfFiducials()):
       usPos = [0,0,0]
       self.usFiducialsNode.GetNthFiducialPosition(index,usPos)
       mrPos = [0,0,0]
