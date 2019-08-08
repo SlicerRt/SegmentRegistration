@@ -23,4 +23,9 @@ Specialized module to register prostate contours in an MRI and an ultrasound stu
 * Calculate TRE with fiducials
 * Export deformed MRI contours and image to DICOM, so that it can be imported to commercial system for brachytherapy cathether insertion
 
+#### Tutorials ####
+
+* [Tutorial slides](https://github.com/SlicerRt/SlicerRtDoc/blob/master/tutorials/SlicerRT_Tutorial_MRI-US-ProstateContourPropagation.pptx)
+* Video tutorial:
+
 [![YouTube video: MRI-US Fusion for Prostate HDR Brachytherapy](https://img.youtube.com/vi/6VT5xPQQyBQ/0.jpg)](https://www.youtube.com/watch?v=6VT5xPQQyBQ)
