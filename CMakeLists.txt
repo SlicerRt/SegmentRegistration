@@ -24,8 +24,12 @@ project(SegmentRegistration)
 find_package(Slicer REQUIRED)
 include(${Slicer_USE_FILE})
 
-find_package(SlicerProstate REQUIRED)
-find_package(SlicerRT REQUIRED)
+if (NOT DEFINED Slicer_EXTENSION_SOURCE_DIRS)
+  find_package(SlicerProstate REQUIRED)
+  find_package(SlicerRT REQUIRED)
+else()
+  # Allow usage if dependent extension is bundled
+endif()
 
 set(DEPENDENCY_BUILD_DIRS "")
 if(CMAKE_CONFIGURATION_TYPES)
