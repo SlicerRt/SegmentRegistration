@@ -15,7 +15,7 @@ set(EXTENSION_CATEGORY "Registration")
 set(EXTENSION_CONTRIBUTORS "Csaba Pinter (PerkLab, Queen's University)")
 set(EXTENSION_DESCRIPTION "Segment registration is an extension that contains generic and more specialized modules for registering two delineations of the same structure, and propagating other segmented structures from one dataset to the other (also called fusion or contour propagation).")
 set(EXTENSION_ICONURL "https://github.com/SlicerRt/SegmentRegistration/raw/master/Logo/SegmentRegistration_Logo_128.png")
-set(EXTENSION_SCREENSHOTURLS "https://www.slicer.org/w/images/a/a1/20170526_ProstatMRIUSContourPropagation.png https://www.slicer.org/w/images/1/15/20160329_MRIUS_1500.gif")
+set(EXTENSION_SCREENSHOTURLS "https://www.slicer.org/slicerWiki/images/a/a1/20170526_ProstatMRIUSContourPropagation.png https://www.slicer.org/slicerWiki/images/1/15/20160329_MRIUS_1500.gif")
 set(EXTENSION_DEPENDS SlicerProstate SlicerRT)
 
 #-----------------------------------------------------------------------------
