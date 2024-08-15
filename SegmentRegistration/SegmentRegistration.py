@@ -379,7 +379,7 @@ class SegmentRegistrationLogic(ScriptedLoadableModuleLogic):
       return
 
     # Create ROI
-    roiNode = slicer.vtkMRMLAnnotationROINode()
+    roiNode = slicer.vtkMRMLMarkupsROINode()
     roiNode.SetName('CropROI_' + self.movingVolumeNode.GetName())
     slicer.mrmlScene.AddNode(roiNode)
 
