@@ -228,8 +228,8 @@ class ProstateMRIUSContourPropagationWidget(ScriptedLoadableModuleWidget):
 
     # Transformation radio buttons
     self.transformationLayout = qt.QHBoxLayout()
-    self.noRegistrationRadioButton = qt.QRadioButton('None')
-    self.rigidRegistrationRadioButton = qt.QRadioButton('Rigid')
+    self.noRegistrationRadioButton = qt.QRadioButton('Rigid')
+    self.rigidRegistrationRadioButton = qt.QRadioButton('Affine')
     self.deformableRegistrationRadioButton = qt.QRadioButton('Deformable')
     self.deformableRegistrationRadioButton.checked = True
     self.noRegistrationRadioButton.connect('clicked()', self.onTransformationModeChanged)
@@ -608,7 +608,7 @@ class ProstateMRIUSContourPropagationLogic(ScriptedLoadableModuleLogic):
       return
 
     # Create ROI
-    roiNode = slicer.vtkMRMLAnnotationROINode()
+    roiNode = slicer.vtkMRMLMarkupsROINode()
     roiNode.SetName('CropROI_' + self.mrVolumeNode.GetName())
     slicer.mrmlScene.AddNode(roiNode)
 
